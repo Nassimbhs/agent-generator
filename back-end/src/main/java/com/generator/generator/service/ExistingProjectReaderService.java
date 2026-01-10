@@ -136,8 +136,10 @@ public class ExistingProjectReaderService {
      */
     private boolean isExcluded(Path path, Path rootPath) {
         Path relativePath = rootPath.relativize(path);
-        for (String segment : relativePath) {
-            if (EXCLUDED_DIRS.contains(segment.toString().toLowerCase())) {
+        int nameCount = relativePath.getNameCount();
+        for (int i = 0; i < nameCount; i++) {
+            String segment = relativePath.getName(i).toString().toLowerCase();
+            if (EXCLUDED_DIRS.contains(segment)) {
                 return true;
             }
         }
