@@ -80,13 +80,21 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                             .filter(line -> line != null && !line.trim().isEmpty());
                 })
                 .map(this::parseOllamaResponse)
-                .filter(response -> response != null)
+                .filter(response -> response != null) // Filter nulls first
                 .filter(response -> {
-                    // Skip if response contains refusal messages
+                    // Check if this is a done marker - skip it, takeUntil will handle termination
+                    Boolean done = response.getDone();
+                    if (Boolean.TRUE.equals(done)) {
+                        return false; // Don't process done markers
+                    }
+                    
+                    // Must have valid response content
                     String responseText = response.getResponse();
                     if (responseText == null || responseText.isEmpty()) {
                         return false;
                     }
+                    
+                    // Skip if response contains refusal messages
                     String lower = responseText.toLowerCase();
                     if (lower.contains("i'm sorry") || lower.contains("i can't") || 
                         lower.contains("cannot") || lower.contains("unable to") ||
@@ -97,8 +105,20 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                     return true;
                 })
                 .takeUntil(response -> Boolean.TRUE.equals(response.getDone()))
-                .filter(response -> response.getResponse() != null && !response.getResponse().isEmpty())
-                .map(OllamaResponse::getResponse)
+                .map(response -> {
+                    // Response should never be null here due to previous filters
+                    // But check anyway to prevent null mapper error
+                    if (response == null) {
+                        log.error("Unexpected null response in map");
+                        return "";
+                    }
+                    String resp = response.getResponse();
+                    if (resp == null) {
+                        log.warn("Null response content in map");
+                        return "";
+                    }
+                    return resp;
+                })
                 .filter(text -> text != null && !text.isEmpty())
                 .doOnNext(chunk -> log.debug("Received chunk: {}", chunk.substring(0, Math.min(50, chunk.length()))))
                 .doOnError(error -> log.error("Error in streaming Ollama call: {}", error.getMessage(), error))

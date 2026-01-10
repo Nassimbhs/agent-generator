@@ -55,6 +55,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/generate/backend/stream").authenticated()
                 .requestMatchers("/api/generate/frontend/stream").authenticated()
                 .requestMatchers("/api/project/**").authenticated()
+                .requestMatchers("/api/templates/**").authenticated()
                 .anyRequest().authenticated()
             )
             .userDetailsService(userDetailsService)

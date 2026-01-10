@@ -34,6 +34,24 @@ public class GeneratorController {
             @RequestParam(required = false) String token,
             Authentication authentication) {
         
+        // Authentication is handled by Spring Security filter chain
+        // If we reach here without authentication, SecurityContext should have it
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.warn("Unauthenticated request to stream endpoint - token might be invalid or expired");
+            SseEmitter errorEmitter = new SseEmitter(0L);
+            try {
+                errorEmitter.send(SseEmitter.event()
+                        .name("error")
+                        .data("Unauthenticated: Please login again"));
+                errorEmitter.complete();
+            } catch (Exception e) {
+                errorEmitter.completeWithError(new RuntimeException("Unauthenticated"));
+            }
+            return errorEmitter;
+        }
+        
+        log.info("Authenticated user: {} - Starting backend code stream", authentication.getName());
+        
         SseEmitter emitter = new SseEmitter(300000L);
         emitter.onCompletion(() -> log.info("SSE connection completed"));
         emitter.onTimeout(() -> {
@@ -58,6 +76,24 @@ public class GeneratorController {
             @RequestParam String prompt,
             @RequestParam(required = false) String token,
             Authentication authentication) {
+        
+        // Authentication is handled by Spring Security filter chain
+        // If we reach here without authentication, SecurityContext should have it
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.warn("Unauthenticated request to stream endpoint - token might be invalid or expired");
+            SseEmitter errorEmitter = new SseEmitter(0L);
+            try {
+                errorEmitter.send(SseEmitter.event()
+                        .name("error")
+                        .data("Unauthenticated: Please login again"));
+                errorEmitter.complete();
+            } catch (Exception e) {
+                errorEmitter.completeWithError(new RuntimeException("Unauthenticated"));
+            }
+            return errorEmitter;
+        }
+        
+        log.info("Authenticated user: {} - Starting frontend code stream", authentication.getName());
         
         SseEmitter emitter = new SseEmitter(300000L);
         emitter.onCompletion(() -> log.info("SSE connection completed"));

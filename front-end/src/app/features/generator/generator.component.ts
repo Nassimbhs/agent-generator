@@ -8,8 +8,13 @@ import { ProgressBarModule } from 'primeng/progressbar';
 import { TagModule } from 'primeng/tag';
 import { TabViewModule } from 'primeng/tabview';
 import { ToastModule } from 'primeng/toast';
+import { TreeModule } from 'primeng/tree';
 import { MessageService } from 'primeng/api';
+import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
+import { ProjectStructure, TreeNode } from '../../models/project-file.model';
+import { ProjectStructureService } from '../../core/services/project-structure.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   selector: 'app-generator',
@@ -23,7 +28,8 @@ import { environment } from '../../../environments/environment';
     ProgressBarModule,
     TagModule,
     TabViewModule,
-    ToastModule
+    ToastModule,
+    TreeModule
   ],
   template: `
     <div class="w-full max-w-6xl mx-auto p-4">
@@ -61,7 +67,7 @@ import { environment } from '../../../environments/environment';
               label="Generate Backend (Live)" 
               icon="pi pi-server"
               [loading]="streamingBackend"
-              [disabled]="generatorForm.invalid || streamingFrontend"
+              [disabled]="generatorForm.invalid || streamingFrontend || promptControl?.disabled"
               class="flex-1">
             </p-button>
             <p-button 
@@ -70,7 +76,7 @@ import { environment } from '../../../environments/environment';
               icon="pi pi-desktop"
               severity="secondary"
               [loading]="streamingFrontend"
-              [disabled]="generatorForm.invalid || streamingBackend"
+              [disabled]="generatorForm.invalid || streamingBackend || promptControl?.disabled"
               (onClick)="onGenerateFrontend()"
               class="flex-1">
             </p-button>
@@ -80,8 +86,26 @@ import { environment } from '../../../environments/environment';
               icon="pi pi-code"
               severity="info"
               [loading]="streamingBackend || streamingFrontend"
-              [disabled]="generatorForm.invalid || streamingBackend || streamingFrontend"
+              [disabled]="generatorForm.invalid || streamingBackend || streamingFrontend || promptControl?.disabled"
               (onClick)="onGenerateAll()"
+              class="flex-1">
+            </p-button>
+            <p-button 
+              type="button"
+              label="Download Backend Template" 
+              icon="pi pi-download"
+              severity="help"
+              [outlined]="true"
+              (onClick)="downloadBackendTemplate()"
+              class="flex-1">
+            </p-button>
+            <p-button 
+              type="button"
+              label="Download Frontend Template" 
+              icon="pi pi-download"
+              severity="help"
+              [outlined]="true"
+              (onClick)="downloadFrontendTemplate()"
               class="flex-1">
             </p-button>
           </div>
@@ -118,62 +142,150 @@ import { environment } from '../../../environments/environment';
           </div>
         }
 
-        <!-- Live Code Display -->
+        <!-- Live Code Display with Tree -->
         @if (streamingBackend || streamingFrontend || backendCode || frontendCode) {
           <div class="mt-4">
             <p-tabView>
               @if (streamingBackend || backendCode) {
                 <p-tabPanel header="Backend Code (Live)">
-                  <div class="relative">
-                    @if (streamingBackend) {
-                      <div class="absolute top-0 right-0 z-1 p-2">
-                        <span class="text-xs bg-primary text-white border-round px-2 py-1">
-                          <i class="pi pi-circle-fill mr-1" style="animation: blink 1s infinite;"></i>
-                          LIVE
-                        </span>
+                  <div class="grid">
+                    <!-- File Tree -->
+                    <div class="col-12 md:col-3 border-right-1 surface-border">
+                      <div class="flex justify-content-between align-items-center mb-2">
+                        <h4 class="m-0 text-sm font-semibold">Project Structure</h4>
+                        @if (backendProjectStructure) {
+                          <p-button 
+                            label="Download ZIP" 
+                            icon="pi pi-download"
+                            size="small"
+                            [text]="true"
+                            (onClick)="downloadProjectZip(backendProjectStructure)">
+                          </p-button>
+                        }
                       </div>
-                    }
-                    <div class="flex justify-content-end mb-2">
-                      <p-button 
-                        label="Copy" 
-                        icon="pi pi-copy"
-                        size="small"
-                        [text]="true"
-                        [disabled]="streamingBackend"
-                        (onClick)="copyToClipboard(backendCode)">
-                      </p-button>
+                      @if (backendTreeNodes && backendTreeNodes.length > 0) {
+                        <p-tree 
+                          [value]="backendTreeNodes" 
+                          selectionMode="single"
+                          [(selection)]="selectedBackendFile"
+                          (onNodeSelect)="onBackendFileSelect($event)"
+                          [expandedKeys]="expandedKeys"
+                          styleClass="w-full text-sm">
+                          <ng-template let-node pTemplate="default">
+                            <span class="flex align-items-center gap-2">
+                              <i [class]="node.icon"></i>
+                              <span>{{ node.label }}</span>
+                            </span>
+                          </ng-template>
+                        </p-tree>
+                      } @else {
+                        <p class="text-color-secondary text-sm text-center p-4">No files parsed yet</p>
+                      }
                     </div>
-                    <pre class="p-4 m-0 bg-gray-900 text-green-400 border-round text-sm line-height-3 overflow-auto font-mono" 
-                         style="max-height: 600px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace;"
-                         id="backend-code">{{ backendCode }}@if (streamingBackend) {<span class="text-white animate-blink">|</span>}</pre>
+                    
+                    <!-- Code Display -->
+                    <div class="col-12 md:col-9">
+                      <div class="relative">
+                        @if (streamingBackend) {
+                          <div class="absolute top-0 right-0 z-1 p-2">
+                            <span class="text-xs bg-primary text-white border-round px-2 py-1">
+                              <i class="pi pi-circle-fill mr-1" style="animation: blink 1s infinite;"></i>
+                              LIVE
+                            </span>
+                          </div>
+                        }
+                        @if (selectedBackendFile) {
+                          <div class="mb-2">
+                            <p class="text-sm font-semibold m-0">FILE: {{ selectedBackendFile.data || 'generated-code.txt' }}</p>
+                          </div>
+                        }
+                        <div class="flex justify-content-end mb-2">
+                          <p-button 
+                            label="Copy" 
+                            icon="pi pi-copy"
+                            size="small"
+                            [text]="true"
+                            [disabled]="streamingBackend"
+                            (onClick)="copyToClipboard(selectedBackendFileContent || backendCode)">
+                          </p-button>
+                        </div>
+                        <pre class="p-4 m-0 bg-gray-900 text-green-400 border-round text-sm line-height-3 overflow-auto font-mono" 
+                             style="max-height: 600px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace;"
+                             id="backend-code">{{ selectedBackendFileContent || backendCode }}@if (streamingBackend) {<span class="text-white animate-blink">|</span>}</pre>
+                      </div>
+                    </div>
                   </div>
                 </p-tabPanel>
               }
 
               @if (streamingFrontend || frontendCode) {
                 <p-tabPanel header="Frontend Code (Live)">
-                  <div class="relative">
-                    @if (streamingFrontend) {
-                      <div class="absolute top-0 right-0 z-1 p-2">
-                        <span class="text-xs bg-primary text-white border-round px-2 py-1">
-                          <i class="pi pi-circle-fill mr-1" style="animation: blink 1s infinite;"></i>
-                          LIVE
-                        </span>
+                  <div class="grid">
+                    <!-- File Tree -->
+                    <div class="col-12 md:col-3 border-right-1 surface-border">
+                      <div class="flex justify-content-between align-items-center mb-2">
+                        <h4 class="m-0 text-sm font-semibold">Project Structure</h4>
+                        @if (frontendProjectStructure) {
+                          <p-button 
+                            label="Download ZIP" 
+                            icon="pi pi-download"
+                            size="small"
+                            [text]="true"
+                            (onClick)="downloadProjectZip(frontendProjectStructure)">
+                          </p-button>
+                        }
                       </div>
-                    }
-                    <div class="flex justify-content-end mb-2">
-                      <p-button 
-                        label="Copy" 
-                        icon="pi pi-copy"
-                        size="small"
-                        [text]="true"
-                        [disabled]="streamingFrontend"
-                        (onClick)="copyToClipboard(frontendCode)">
-                      </p-button>
+                      @if (frontendTreeNodes && frontendTreeNodes.length > 0) {
+                        <p-tree 
+                          [value]="frontendTreeNodes" 
+                          selectionMode="single"
+                          [(selection)]="selectedFrontendFile"
+                          (onNodeSelect)="onFrontendFileSelect($event)"
+                          [expandedKeys]="expandedKeys"
+                          styleClass="w-full text-sm">
+                          <ng-template let-node pTemplate="default">
+                            <span class="flex align-items-center gap-2">
+                              <i [class]="node.icon"></i>
+                              <span>{{ node.label }}</span>
+                            </span>
+                          </ng-template>
+                        </p-tree>
+                      } @else {
+                        <p class="text-color-secondary text-sm text-center p-4">No files parsed yet</p>
+                      }
                     </div>
-                    <pre class="p-4 m-0 bg-gray-900 text-blue-400 border-round text-sm line-height-3 overflow-auto font-mono" 
-                         style="max-height: 600px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace;"
-                         id="frontend-code">{{ frontendCode }}@if (streamingFrontend) {<span class="text-white animate-blink">|</span>}</pre>
+                    
+                    <!-- Code Display -->
+                    <div class="col-12 md:col-9">
+                      <div class="relative">
+                        @if (streamingFrontend) {
+                          <div class="absolute top-0 right-0 z-1 p-2">
+                            <span class="text-xs bg-primary text-white border-round px-2 py-1">
+                              <i class="pi pi-circle-fill mr-1" style="animation: blink 1s infinite;"></i>
+                              LIVE
+                            </span>
+                          </div>
+                        }
+                        @if (selectedFrontendFile) {
+                          <div class="mb-2">
+                            <p class="text-sm font-semibold m-0">FILE: {{ selectedFrontendFile.data || 'generated-code.txt' }}</p>
+                          </div>
+                        }
+                        <div class="flex justify-content-end mb-2">
+                          <p-button 
+                            label="Copy" 
+                            icon="pi pi-copy"
+                            size="small"
+                            [text]="true"
+                            [disabled]="streamingFrontend"
+                            (onClick)="copyToClipboard(selectedFrontendFileContent || frontendCode)">
+                          </p-button>
+                        </div>
+                        <pre class="p-4 m-0 bg-gray-900 text-blue-400 border-round text-sm line-height-3 overflow-auto font-mono" 
+                             style="max-height: 600px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace;"
+                             id="frontend-code">{{ selectedFrontendFileContent || frontendCode }}@if (streamingFrontend) {<span class="text-white animate-blink">|</span>}</pre>
+                      </div>
+                    </div>
                   </div>
                 </p-tabPanel>
               }
@@ -204,12 +316,27 @@ export class GeneratorComponent implements OnDestroy {
   estimatedTime = 0;
   elapsedTime = 0;
   progressPercentage = 0;
+  
+  // Project structure for tree display
+  backendProjectStructure: ProjectStructure | null = null;
+  frontendProjectStructure: ProjectStructure | null = null;
+  backendTreeNodes: TreeNode[] = [];
+  frontendTreeNodes: TreeNode[] = [];
+  selectedBackendFile: TreeNode | null = null;
+  selectedFrontendFile: TreeNode | null = null;
+  selectedBackendFileContent = '';
+  selectedFrontendFileContent = '';
+  expandedKeys: { [key: string]: boolean } = {};
+
   private progressInterval: any;
   private eventSource: EventSource | null = null;
 
   constructor(
     private fb: FormBuilder,
-    private messageService: MessageService
+    private messageService: MessageService,
+    private projectStructureService: ProjectStructureService,
+    private http: HttpClient,
+    private authService: AuthService
   ) {
     this.generatorForm = this.fb.group({
       prompt: [{ value: '', disabled: false }, Validators.required]
@@ -285,13 +412,25 @@ export class GeneratorComponent implements OnDestroy {
   }
 
   private startBackendStreaming(prompt: string): void {
-    const token = localStorage.getItem('token');
-    const url = `${environment.apiUrl}/api/generate/backend/stream?token=${encodeURIComponent(token || '')}&prompt=${encodeURIComponent(prompt)}`;
+    const token = this.authService.getToken();
+    if (!token) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Please login first to generate code'
+      });
+      this.streamingBackend = false;
+      this.promptControl?.enable();
+      return;
+    }
+    
+    const url = `${environment.apiUrl}/api/generate/backend/stream?token=${encodeURIComponent(token)}&prompt=${encodeURIComponent(prompt)}`;
     
     this.eventSource = new EventSource(url);
 
     this.eventSource.addEventListener('code-chunk', (event: MessageEvent) => {
       this.backendCode += event.data;
+      this.updateBackendProjectStructure();
       this.scrollToBottom('backend-code');
     });
 
@@ -300,6 +439,7 @@ export class GeneratorComponent implements OnDestroy {
       this.streamingBackend = false;
       this.promptControl?.enable();
       this.stopProgressTimer();
+      this.updateBackendProjectStructure();
       this.messageService.add({ 
         severity: 'success', 
         summary: 'Success', 
@@ -319,6 +459,7 @@ export class GeneratorComponent implements OnDestroy {
 
     this.eventSource.onmessage = (event) => {
       this.backendCode += event.data;
+      this.updateBackendProjectStructure();
       this.scrollToBottom('backend-code');
     };
 
@@ -336,13 +477,25 @@ export class GeneratorComponent implements OnDestroy {
   }
 
   private startFrontendStreaming(prompt: string): void {
-    const token = localStorage.getItem('token');
-    const url = `${environment.apiUrl}/api/generate/frontend/stream?token=${encodeURIComponent(token || '')}&prompt=${encodeURIComponent(prompt)}`;
+    const token = this.authService.getToken();
+    if (!token) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'Please login first to generate code'
+      });
+      this.streamingFrontend = false;
+      this.promptControl?.enable();
+      return;
+    }
+    
+    const url = `${environment.apiUrl}/api/generate/frontend/stream?token=${encodeURIComponent(token)}&prompt=${encodeURIComponent(prompt)}`;
     
     const frontendEventSource = new EventSource(url);
 
     frontendEventSource.addEventListener('code-chunk', (event: MessageEvent) => {
       this.frontendCode += event.data;
+      this.updateFrontendProjectStructure();
       this.scrollToBottom('frontend-code');
     });
 
@@ -351,6 +504,7 @@ export class GeneratorComponent implements OnDestroy {
       this.streamingFrontend = false;
       this.promptControl?.enable();
       this.stopProgressTimer();
+      this.updateFrontendProjectStructure();
       this.messageService.add({ 
         severity: 'success', 
         summary: 'Success', 
@@ -370,6 +524,7 @@ export class GeneratorComponent implements OnDestroy {
 
     frontendEventSource.onmessage = (event) => {
       this.frontendCode += event.data;
+      this.updateFrontendProjectStructure();
       this.scrollToBottom('frontend-code');
     };
 
@@ -443,6 +598,169 @@ export class GeneratorComponent implements OnDestroy {
         });
       });
     }
+  }
+
+  private updateBackendProjectStructure(): void {
+    if (this.backendCode) {
+      const structure = this.projectStructureService.parseFilesFromCode(this.backendCode);
+      if (structure && structure.root) {
+        this.backendProjectStructure = structure;
+        this.backendTreeNodes = [structure.root];
+        
+        // Expand all folders for PrimeNG tree
+        if (structure.root) {
+          this.expandAllFolders(structure.root);
+        }
+        
+        // Auto-select first file if none selected
+        if (!this.selectedBackendFile && structure.files.length > 0) {
+          const firstFile = this.findFirstFile(structure.root);
+          if (firstFile) {
+            this.selectedBackendFile = firstFile;
+            this.selectedBackendFileContent = firstFile.content || firstFile.file?.content || '';
+          }
+        }
+      }
+    }
+  }
+
+  private updateFrontendProjectStructure(): void {
+    if (this.frontendCode) {
+      const structure = this.projectStructureService.parseFilesFromCode(this.frontendCode);
+      if (structure && structure.root) {
+        this.frontendProjectStructure = structure;
+        this.frontendTreeNodes = [structure.root];
+        
+        // Expand all folders for PrimeNG tree
+        if (structure.root) {
+          this.expandAllFolders(structure.root);
+        }
+        
+        // Auto-select first file if none selected
+        if (!this.selectedFrontendFile && structure.files.length > 0) {
+          const firstFile = this.findFirstFile(structure.root);
+          if (firstFile) {
+            this.selectedFrontendFile = firstFile;
+            this.selectedFrontendFileContent = firstFile.content || firstFile.file?.content || '';
+          }
+        }
+      }
+    }
+  }
+
+  private expandAllFolders(node: any): void {
+    if (node.type === 'folder' && node.children) {
+      if (node.key) {
+        this.expandedKeys[node.key] = true;
+      }
+      node.children.forEach((child: any) => this.expandAllFolders(child));
+    }
+  }
+
+  private findFirstFile(node: any): any {
+    if (node.type === 'file') {
+      return node;
+    }
+    if (node.children) {
+      for (const child of node.children) {
+        const file = this.findFirstFile(child);
+        if (file) return file;
+      }
+    }
+    return null;
+  }
+
+  onBackendFileSelect(event: any): void {
+    const node = event.node;
+    if (node && node.type === 'file') {
+      this.selectedBackendFile = node;
+      this.selectedBackendFileContent = node.content || node.file?.content || '';
+      this.scrollToBottom('backend-code');
+    }
+  }
+
+  onFrontendFileSelect(event: any): void {
+    const node = event.node;
+    if (node && node.type === 'file') {
+      this.selectedFrontendFile = node;
+      this.selectedFrontendFileContent = node.content || node.file?.content || '';
+      this.scrollToBottom('frontend-code');
+    }
+  }
+
+  downloadBackendTemplate(): void {
+    this.projectStructureService.downloadBackendTemplate().subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'spring-boot-template.zip';
+        a.click();
+        window.URL.revokeObjectURL(url);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Downloaded',
+          detail: 'Backend template downloaded successfully'
+        });
+      },
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to download backend template'
+        });
+      }
+    });
+  }
+
+  downloadFrontendTemplate(): void {
+    this.projectStructureService.downloadFrontendTemplate().subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'frontend-template.zip';
+        a.click();
+        window.URL.revokeObjectURL(url);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Downloaded',
+          detail: 'Frontend template downloaded successfully'
+        });
+      },
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to download frontend template'
+        });
+      }
+    });
+  }
+
+  downloadProjectZip(structure: ProjectStructure): void {
+    this.projectStructureService.downloadProject(structure).subscribe({
+      next: (blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'project.zip';
+        a.click();
+        window.URL.revokeObjectURL(url);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Downloaded',
+          detail: 'Project ZIP downloaded successfully'
+        });
+      },
+      error: () => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to download project ZIP'
+        });
+      }
+    });
   }
 }
 
