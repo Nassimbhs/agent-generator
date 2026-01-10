@@ -7,7 +7,6 @@ import { TabViewModule } from 'primeng/tabview';
 import { TagModule } from 'primeng/tag';
 import { MessageModule } from 'primeng/message';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
-import { ToastModule } from 'primeng/toast';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { ProjectService } from '../../../core/services/project.service';
 import { Project } from '../../../models/project.model';
@@ -23,10 +22,8 @@ import { Project } from '../../../models/project.model';
     TabViewModule,
     TagModule,
     MessageModule,
-    ConfirmDialogModule,
-    ToastModule
+    ConfirmDialogModule
   ],
-  providers: [ConfirmationService, MessageService],
   template: `
     <div class="w-full">
       @if (loading) {
@@ -153,7 +150,6 @@ import { Project } from '../../../models/project.model';
       }
 
       <p-confirmDialog></p-confirmDialog>
-      <p-toast></p-toast>
     </div>
   `
 })
