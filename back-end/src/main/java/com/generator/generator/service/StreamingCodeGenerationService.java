@@ -63,7 +63,8 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                 .build();
 
         // Increase timeout to 15 minutes for large code generation
-        int extendedTimeout = Math.max(timeoutSeconds, 900); // 15 minutes minimum
+        // Ensure minimum 15 minutes (900 seconds) for large code generation
+        long extendedTimeout = timeoutSeconds != null && timeoutSeconds > 900 ? timeoutSeconds : 900L;
         
         log.info("Starting code generation stream with {} second timeout", extendedTimeout);
 
