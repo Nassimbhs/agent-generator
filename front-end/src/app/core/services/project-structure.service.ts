@@ -64,45 +64,80 @@ export class ProjectStructureService {
     }
     
     // Parse FILE: patterns from generated code
-    // Pattern matches: FILE: path/to/file.ext\n```language\ncontent\n```
-    // or FILE: path/to/file.ext\ncontent (without code blocks)
-    // Improved pattern to correctly capture file paths
-    // FILE: followed by path (non-greedy until newline), then optional code block
-    const filePattern = /FILE:\s*([^\n\r]+?)(?:\s*\r?\n)(?:```(\w+)?\s*\r?\n)?([\s\S]*?)(?:```\s*(?:\r?\n|$)|(?=\s*FILE:)|$)/gi;
+    // Expected format:
+    // FILE: path/to/file.ext
+    // ```language
+    // content here
+    // ```
+    // 
+    // OR (during streaming, without closing backticks):
+    // FILE: path/to/file.ext
+    // ```language
+    // content here (incomplete)
+    
     const files: any[] = [];
+    const filePattern = /FILE:\s*([^\n\r]+?)(?:\r?\n)(?:```(\w+)?\s*\r?\n)?([\s\S]*?)(?:```(?:\s*\r?\n|$)|(?=\s*FILE:)|$)/gi;
+    
     let match;
-    let lastIndex = 0;
+    let lastMatchIndex = 0;
 
     while ((match = filePattern.exec(code)) !== null) {
       // Group 1: File path (everything after FILE: until newline)
-      let path = match[1]?.trim();
+      let path = (match[1] || '').trim();
       // Group 2: Language (optional, from ```language)
-      const language = match[2]?.trim() || this.detectLanguage(path || '');
-      // Group 3: Content (everything between code blocks or until next FILE:)
+      let language = (match[2] || '').trim();
+      // Group 3: Content (everything after language marker or directly after path)
       let content = (match[3] || '').trim();
       
-      // Clean up path - remove any trailing whitespace or invalid characters
+      // Remove closing backticks if present in content
+      content = content.replace(/```\s*$/gm, '').trim();
+      
+      // Clean up path - only keep valid path characters
       if (path) {
-        path = path.replace(/[^\w\s\/\\\.\-_]/g, '').trim();
+        // Don't remove too much - just clean leading/trailing whitespace and normalize
+        path = path.trim();
+        // Remove any characters that aren't valid in file paths (but keep dots, slashes, hyphens, underscores)
+        path = path.replace(/[<>:"|?*\x00-\x1f]/g, '').trim();
       }
       
-      // Extract filename from path
-      const name = path ? (path.split('/').pop() || path.split('\\').pop() || path) : 'unknown';
-
-      // Only add if we have a valid path and some content
-      if (path && path.length > 0 && content.length > 0) {
-        files.push({
-          path: path.replace(/\\/g, '/'), // Normalize path separators
-          name: name || path, // Use path as fallback if name extraction fails
-          content,
-          language,
-          type: 'file'
-        });
-        console.log('Parsed file:', path, 'Name:', name, 'Language:', language, 'Content length:', content.length);
-      } else {
-        console.warn('Skipping invalid file entry. Path:', path, 'Content length:', content.length);
+      // If no language was detected from code block, detect from file extension
+      if (!language && path) {
+        language = this.detectLanguage(path);
       }
-      lastIndex = match.index + match[0].length;
+      
+      // Extract filename from path (last segment)
+      const pathParts = path.split('/').filter(p => p && p.trim().length > 0);
+      const name = pathParts.length > 0 ? pathParts[pathParts.length - 1] : path || 'unknown';
+
+      // Only add if we have a valid path
+      if (path && path.length > 0) {
+        // During streaming, content might be empty or incomplete - that's OK
+        // But ensure we have at least a minimal path structure
+        const normalizedPath = path.replace(/\\/g, '/');
+        
+        // Check if this file already exists (during streaming, same file might be parsed multiple times)
+        const existingIndex = files.findIndex(f => f.path === normalizedPath);
+        const fileData = {
+          path: normalizedPath,
+          name: name,
+          content: content, // Can be empty during streaming
+          language: language || 'text',
+          type: 'file'
+        };
+        
+        if (existingIndex >= 0) {
+          // Update existing file with more complete content
+          files[existingIndex] = fileData;
+          console.log('Updated file:', normalizedPath, 'Content length:', content.length);
+        } else {
+          files.push(fileData);
+          console.log('Parsed file:', normalizedPath, 'Name:', name, 'Language:', language || 'auto', 'Content length:', content.length);
+        }
+      } else {
+        console.warn('Skipping file with invalid path:', match[0]?.substring(0, 100));
+      }
+      
+      lastMatchIndex = match.index + match[0].length;
     }
     
     // If no FILE: patterns found but we have code, treat entire code as single file
@@ -146,7 +181,7 @@ export class ProjectStructureService {
         continue;
       }
       
-      const parts = file.path.split('/').filter(p => p && p.trim().length > 0);
+      const parts = file.path.split('/').filter((p: string) => p && p.trim().length > 0);
       
       // If no parts, skip this file
       if (parts.length === 0) {

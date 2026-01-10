@@ -180,9 +180,9 @@ import { AuthService } from '../../core/services/auth.service';
                 <p-tabPanel header="Backend Code (Live)">
                   <div class="grid p-0 m-0">
                     <!-- File Tree -->
-                    <div class="col-12 lg:col-3 border-right-1 surface-border flex flex-column overflow-hidden max-h-30rem">
-                      <div class="flex justify-content-between align-items-center p-2 sticky top-0 bg-white z-1 border-bottom-1 surface-border">
-                        <h4 class="m-0 text-sm font-semibold text-overflow-ellipsis overflow-hidden white-space-nowrap flex-1">Project Structure</h4>
+                    <div class="col-12 lg:col-3 border-right-1 surface-border flex flex-column overflow-hidden max-h-30rem min-w-0">
+                      <div class="flex justify-content-between align-items-center p-2 sticky top-0 bg-white z-1 border-bottom-1 surface-border min-w-0">
+                        <h4 class="m-0 text-sm font-semibold text-overflow-ellipsis overflow-hidden flex-1 min-w-0">Project Structure</h4>
                         @if (backendProjectStructure) {
                           <p-button 
                             icon="pi pi-download"
@@ -196,17 +196,17 @@ import { AuthService } from '../../core/services/auth.service';
                         }
                       </div>
                       @if (backendTreeNodes && backendTreeNodes.length > 0) {
-                        <div class="flex-1 overflow-y-auto overflow-x-hidden p-2 tree-container">
+                        <div class="flex-1 overflow-y-auto overflow-x-hidden p-2 tree-container min-w-0">
                           <p-tree 
                             [value]="backendTreeNodes" 
                             selectionMode="single"
                             [(selection)]="selectedBackendFile"
                             (onNodeSelect)="onBackendFileSelect($event)"
-                            styleClass="w-full text-sm project-tree overflow-hidden">
+                            styleClass="w-full text-sm project-tree min-w-0">
                             <ng-template let-node pTemplate="default">
-                              <span class="flex align-items-center gap-1 w-full">
+                              <span class="flex align-items-center gap-1 w-full min-w-0">
                                 <i [class]="node.icon" class="flex-shrink-0"></i>
-                                <span class="text-overflow-ellipsis overflow-hidden white-space-nowrap flex-1">{{ node.label }}</span>
+                                <span class="text-overflow-ellipsis overflow-hidden flex-1 min-w-0 break-words" [title]="node.label">{{ node.label }}</span>
                               </span>
                             </ng-template>
                           </p-tree>
@@ -256,9 +256,9 @@ import { AuthService } from '../../core/services/auth.service';
                 <p-tabPanel header="Frontend Code (Live)">
                   <div class="grid">
                     <!-- File Tree -->
-                    <div class="col-12 lg:col-3 border-right-1 surface-border flex flex-column overflow-hidden max-h-30rem">
-                      <div class="flex justify-content-between align-items-center p-2 sticky top-0 bg-white z-1 border-bottom-1 surface-border">
-                        <h4 class="m-0 text-sm font-semibold text-overflow-ellipsis overflow-hidden white-space-nowrap flex-1">Project Structure</h4>
+                    <div class="col-12 lg:col-3 border-right-1 surface-border flex flex-column overflow-hidden max-h-30rem min-w-0">
+                      <div class="flex justify-content-between align-items-center p-2 sticky top-0 bg-white z-1 border-bottom-1 surface-border min-w-0">
+                        <h4 class="m-0 text-sm font-semibold text-overflow-ellipsis overflow-hidden flex-1 min-w-0">Project Structure</h4>
                         @if (frontendProjectStructure) {
                           <p-button 
                             icon="pi pi-download"
@@ -272,17 +272,17 @@ import { AuthService } from '../../core/services/auth.service';
                         }
                       </div>
                       @if (frontendTreeNodes && frontendTreeNodes.length > 0) {
-                        <div class="flex-1 overflow-y-auto overflow-x-hidden p-2 tree-container">
+                        <div class="flex-1 overflow-y-auto overflow-x-hidden p-2 tree-container min-w-0">
                           <p-tree 
                             [value]="frontendTreeNodes" 
                             selectionMode="single"
                             [(selection)]="selectedFrontendFile"
                             (onNodeSelect)="onFrontendFileSelect($event)"
-                            styleClass="w-full text-sm project-tree overflow-hidden">
+                            styleClass="w-full text-sm project-tree min-w-0">
                             <ng-template let-node pTemplate="default">
-                              <span class="flex align-items-center gap-1 w-full">
+                              <span class="flex align-items-center gap-1 w-full min-w-0">
                                 <i [class]="node.icon" class="flex-shrink-0"></i>
-                                <span class="text-overflow-ellipsis overflow-hidden white-space-nowrap flex-1">{{ node.label }}</span>
+                                <span class="text-overflow-ellipsis overflow-hidden flex-1 min-w-0 break-words" [title]="node.label">{{ node.label }}</span>
                               </span>
                             </ng-template>
                           </p-tree>
@@ -367,12 +367,45 @@ import { AuthService } from '../../core/services/auth.service';
     .code-viewer::-webkit-scrollbar-thumb:hover { background: #718096; }
     
     /* PrimeNG Tree deep styling - minimal necessary overrides */
-    .project-tree ::ng-deep .p-tree { width: 100%; overflow: hidden; }
-    .project-tree ::ng-deep .p-tree-container { width: 100%; overflow-x: hidden; }
-    .project-tree ::ng-deep .p-treenode-content { width: 100%; overflow: hidden; }
+    .project-tree ::ng-deep .p-tree { 
+      width: 100%; 
+      overflow: hidden; 
+      max-width: 100%;
+    }
+    .project-tree ::ng-deep .p-tree-container { 
+      width: 100%; 
+      overflow-x: hidden; 
+      overflow-y: auto;
+      max-width: 100%;
+    }
+    .project-tree ::ng-deep .p-treenode { 
+      width: 100%; 
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .project-tree ::ng-deep .p-treenode-content { 
+      width: 100%; 
+      max-width: 100%;
+      overflow: hidden; 
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    }
     .project-tree ::ng-deep .p-treenode-content:hover { background-color: #f3f4f6; }
     .project-tree ::ng-deep .p-treenode-content.p-highlight { background-color: #dbeafe; color: #1e40af; }
-    .project-tree ::ng-deep .p-treenode-children { width: 100%; overflow-x: hidden; }
+    .project-tree ::ng-deep .p-treenode-children { 
+      width: 100%; 
+      max-width: 100%;
+      overflow-x: hidden; 
+      overflow-y: visible;
+    }
+    .project-tree ::ng-deep .p-treenode-label { 
+      width: 100%; 
+      max-width: 100%;
+      overflow: hidden;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      white-space: normal;
+    }
     
     /* Responsive max-height adjustments - using rem for consistency */
     @media (max-width: 991px) {
@@ -823,7 +856,12 @@ export class GeneratorComponent implements OnDestroy {
           const firstFile = this.findFirstFile(structure.root);
           if (firstFile) {
             this.selectedBackendFile = firstFile;
-            this.selectedBackendFileContent = firstFile.content || firstFile.file?.content || '';
+            const filePath = firstFile.data || firstFile.file?.path || '';
+            // Extract content from raw code to ensure we have the actual content
+            this.selectedBackendFileContent = this.extractFileContent(this.backendCode, filePath) 
+              || firstFile.content 
+              || firstFile.file?.content 
+              || '';
           }
         }
       }
@@ -847,7 +885,12 @@ export class GeneratorComponent implements OnDestroy {
           const firstFile = this.findFirstFile(structure.root);
           if (firstFile) {
             this.selectedFrontendFile = firstFile;
-            this.selectedFrontendFileContent = firstFile.content || firstFile.file?.content || '';
+            const filePath = firstFile.data || firstFile.file?.path || '';
+            // Extract content from raw code to ensure we have the actual content
+            this.selectedFrontendFileContent = this.extractFileContent(this.frontendCode, filePath) 
+              || firstFile.content 
+              || firstFile.file?.content 
+              || '';
           }
         }
       }
@@ -878,7 +921,10 @@ export class GeneratorComponent implements OnDestroy {
     const node = event.node;
     if (node && node.type === 'file') {
       this.selectedBackendFile = node;
-      this.selectedBackendFileContent = node.content || node.file?.content || '';
+      const filePath = node.data || node.file?.path || '';
+      // Extract content from raw code for the selected file path
+      const content = this.extractFileContent(this.backendCode, filePath) || node.content || node.file?.content || '';
+      this.selectedBackendFileContent = content;
       this.scrollToBottom('backend-code');
     }
   }
@@ -887,9 +933,85 @@ export class GeneratorComponent implements OnDestroy {
     const node = event.node;
     if (node && node.type === 'file') {
       this.selectedFrontendFile = node;
-      this.selectedFrontendFileContent = node.content || node.file?.content || '';
+      const filePath = node.data || node.file?.path || '';
+      // Extract content from raw code for the selected file path
+      const content = this.extractFileContent(this.frontendCode, filePath) || node.content || node.file?.content || '';
+      this.selectedFrontendFileContent = content;
       this.scrollToBottom('frontend-code');
     }
+  }
+
+  /**
+   * Extracts the actual file content from raw generated code for a specific file path.
+   * This ensures we get the complete content even during streaming.
+   */
+  private extractFileContent(rawCode: string, filePath: string): string {
+    if (!rawCode || !filePath) {
+      return '';
+    }
+
+    // Normalize the path for comparison (handle different separators)
+    const normalizedPath = filePath.replace(/\\/g, '/').trim();
+    
+    // Escape special regex characters in file path, but keep dots and slashes
+    // We need to escape: . * + ? ^ $ { } ( ) | [ ] \
+    // But we want to keep: . / - _ (these are valid in paths)
+    const escapedPath = normalizedPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Pattern to match: FILE: path\n```language\ncontent\n```
+    // OR: FILE: path\ncontent (without code blocks during streaming)
+    // More flexible pattern that handles incomplete blocks during streaming
+    const patterns = [
+      // Pattern 1: With code blocks (complete)
+      new RegExp(
+        `FILE:\\s*${escapedPath}\\s*\\r?\\n\\\`\\\`\\\`(?:\\w+)?\\s*\\r?\\n([\\s\\S]*?)\\\`\\\`\\\`(?:\\s*\\r?\\n|$)(?=\\s*FILE:|$)`,
+        'i'
+      ),
+      // Pattern 2: Without code blocks (during streaming or incomplete)
+      new RegExp(
+        `FILE:\\s*${escapedPath}\\s*\\r?\\n([\\s\\S]*?)(?=\\s*FILE:|$)`,
+        'i'
+      )
+    ];
+    
+    // Try both patterns
+    for (const pattern of patterns) {
+      const match = rawCode.match(pattern);
+      if (match && match[1]) {
+        let content = match[1].trim();
+        // Remove closing backticks if present
+        content = content.replace(/```\s*$/gm, '').trim();
+        // Remove any remaining FILE: declarations that might have leaked in
+        content = content.replace(/^\s*FILE:.*$/gm, '').trim();
+        // Remove leading/trailing whitespace
+        content = content.trim();
+        
+        // Only return if we have actual content (not just whitespace)
+        if (content.length > 0) {
+          return content;
+        }
+      }
+    }
+    
+    // If no match found, try a more lenient search - just find FILE: followed by path-like string
+    // This handles cases where the path format might vary slightly
+    const filename = normalizedPath.split('/').pop() || normalizedPath;
+    const lenientPattern = new RegExp(
+      `FILE:[^\\n]*${filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^\\n]*\\r?\\n(?:\\\`\\\`\\\`[^\\n]*\\r?\\n)?([\\s\\S]*?)(?:\\\`\\\`\\\`|(?=FILE:)|$)`,
+      'i'
+    );
+    
+    const lenientMatch = rawCode.match(lenientPattern);
+    if (lenientMatch && lenientMatch[1]) {
+      let content = lenientMatch[1].trim();
+      content = content.replace(/```\s*$/gm, '').trim();
+      content = content.replace(/^\s*FILE:.*$/gm, '').trim();
+      if (content.length > 0) {
+        return content;
+      }
+    }
+    
+    return '';
   }
 
   downloadBackendTemplate(): void {
