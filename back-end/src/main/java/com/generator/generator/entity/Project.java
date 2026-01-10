@@ -33,8 +33,14 @@ public class Project {
     @Column(name = "prompt", columnDefinition = "TEXT")
     private String prompt;
 
+    @Column(name = "backend_code", columnDefinition = "TEXT")
+    private String backendCode;
+
+    @Column(name = "frontend_code", columnDefinition = "TEXT")
+    private String frontendCode;
+
     @Column(name = "generated_code", columnDefinition = "TEXT")
-    private String generatedCode;
+    private String generatedCode; // Legacy field, kept for compatibility
 
     @Column(name = "project_type")
     private String projectType;

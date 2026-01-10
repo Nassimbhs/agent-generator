@@ -91,7 +91,7 @@ public class ProjectController {
     }
 
     @PostMapping("/{id}/generate")
-    @Operation(summary = "Generate code for project", description = "Generates CRUD code using Qwen2.5-Coder LLM")
+    @Operation(summary = "Generate all code for project", description = "Generates both Spring Boot CRUD and Angular TypeScript interfaces using Qwen2.5-Coder LLM")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Code generated successfully"),
         @ApiResponse(responseCode = "404", description = "Project not found or access denied")
@@ -100,6 +100,32 @@ public class ProjectController {
             @PathVariable Long id,
             Authentication authentication) {
         ProjectResponse project = projectService.generateCode(id, authentication.getName());
+        return ResponseEntity.ok(project);
+    }
+
+    @PostMapping("/{id}/generate/backend")
+    @Operation(summary = "Generate Spring Boot CRUD code", description = "Generates Spring Boot CRUD REST API code using Qwen2.5-Coder LLM")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Backend code generated successfully"),
+        @ApiResponse(responseCode = "404", description = "Project not found or access denied")
+    })
+    public ResponseEntity<ProjectResponse> generateBackendCode(
+            @PathVariable Long id,
+            Authentication authentication) {
+        ProjectResponse project = projectService.generateBackendCode(id, authentication.getName());
+        return ResponseEntity.ok(project);
+    }
+
+    @PostMapping("/{id}/generate/frontend")
+    @Operation(summary = "Generate Angular TypeScript interfaces", description = "Generates Angular TypeScript interface/model files using Qwen2.5-Coder LLM")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Frontend code generated successfully"),
+        @ApiResponse(responseCode = "404", description = "Project not found or access denied")
+    })
+    public ResponseEntity<ProjectResponse> generateFrontendCode(
+            @PathVariable Long id,
+            Authentication authentication) {
+        ProjectResponse project = projectService.generateFrontendCode(id, authentication.getName());
         return ResponseEntity.ok(project);
     }
 }

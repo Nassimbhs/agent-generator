@@ -12,5 +12,7 @@ public interface IProjectService {
     ProjectResponse updateProject(Long id, ProjectRequest request, String username);
     void deleteProject(Long id, String username);
     ProjectResponse generateCode(Long projectId, String username);
+    ProjectResponse generateBackendCode(Long projectId, String username);
+    ProjectResponse generateFrontendCode(Long projectId, String username);
 }
 

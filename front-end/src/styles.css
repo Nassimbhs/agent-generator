@@ -1,0 +1,17 @@
+/* Minimal custom CSS - using PrimeFlex for most styling */
+
+:root {
+  --primary-color: #3b82f6;
+  --primary-color-dark: #2563eb;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-family);
+}
+

@@ -16,7 +16,9 @@ public class ProjectResponse {
     private String name;
     private String description;
     private String prompt;
-    private String generatedCode;
+    private String backendCode;
+    private String frontendCode;
+    private String generatedCode; // Legacy field
     private String projectType;
     private Long userId;
     private String username;
