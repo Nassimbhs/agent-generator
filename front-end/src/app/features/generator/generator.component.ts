@@ -460,16 +460,29 @@ export class GeneratorComponent implements OnDestroy {
       this.scrollToBottom('backend-code');
     };
 
-    this.eventSource.onerror = () => {
-      this.eventSource?.close();
-      this.streamingBackend = false;
-      this.promptControl?.enable();
-      this.stopProgressTimer();
-      this.messageService.add({ 
-        severity: 'error', 
-        summary: 'Error', 
-        detail: 'Streaming connection failed. Please try again.' 
-      });
+    this.eventSource.onerror = (error: any) => {
+      console.error('EventSource error:', error, 'ReadyState:', this.eventSource?.readyState);
+      // EventSource.onerror fires when connection is closed, even on success
+      // Only treat as error if readyState is CLOSED (2) and we didn't receive complete event
+      if (this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
+        // Check if we received any data
+        if (this.backendCode.length === 0 && this.streamingBackend) {
+          this.eventSource?.close();
+          this.streamingBackend = false;
+          this.promptControl?.enable();
+          this.stopProgressTimer();
+          this.messageService.add({ 
+            severity: 'error', 
+            summary: 'Connection Error', 
+            detail: 'Failed to connect to server. Please check if the backend is running at ' + environment.apiUrl + ' and you are logged in.' 
+          });
+        } else {
+          // Stream completed normally (we have data)
+          this.streamingBackend = false;
+          this.promptControl?.enable();
+          this.stopProgressTimer();
+        }
+      }
     };
   }
 
@@ -525,16 +538,24 @@ export class GeneratorComponent implements OnDestroy {
       this.scrollToBottom('frontend-code');
     };
 
-    frontendEventSource.onerror = () => {
-      frontendEventSource.close();
-      this.streamingFrontend = false;
-      this.promptControl?.enable();
-      this.stopProgressTimer();
-      this.messageService.add({ 
-        severity: 'error', 
-        summary: 'Error', 
-        detail: 'Streaming connection failed. Please try again.' 
-      });
+    frontendEventSource.onerror = (error) => {
+      console.error('EventSource error:', error);
+      // EventSource.onerror fires when connection is closed, even on success
+      // Only treat as error if readyState is CLOSED (2) and we didn't receive complete event
+      if (frontendEventSource.readyState === EventSource.CLOSED) {
+        // Check if we received any data
+        if (this.frontendCode.length === 0 && this.streamingFrontend) {
+          frontendEventSource.close();
+          this.streamingFrontend = false;
+          this.promptControl?.enable();
+          this.stopProgressTimer();
+          this.messageService.add({ 
+            severity: 'error', 
+            summary: 'Connection Error', 
+            detail: 'Failed to connect to server. Please check if the backend is running and you are logged in.' 
+          });
+        }
+      }
     };
   }
 

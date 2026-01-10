@@ -10,7 +10,10 @@ export const authGuard: CanActivateFn = (route, state) => {
     return true;
   }
 
-  router.navigate(['/login']);
+  // Navigate to login route, not /auth
+  router.navigate(['/login']).catch(err => {
+    console.error('Navigation error:', err);
+  });
   return false;
 };
 
