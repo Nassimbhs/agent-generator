@@ -92,31 +92,36 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                     }
                 })
                 .filter(response -> response != null) // Filter nulls first
-                // IMPORTANT: takeUntil must come BEFORE filtering out done markers
-                // This allows takeUntil to see the done marker and terminate the stream
+                .doOnNext(response -> {
+                    Boolean done = response.getDone();
+                    String resp = response.getResponse();
+                    log.info("Processing response - done: {}, has content: {}, content length: {}", 
+                        done, resp != null && !resp.isEmpty(), resp != null ? resp.length() : 0);
+                })
+                // CRITICAL: takeUntil must see the done marker BEFORE we filter it out
+                // takeUntil INCLUDES the matching element, then stops
                 .takeUntil(response -> {
                     Boolean done = response.getDone();
                     if (Boolean.TRUE.equals(done)) {
-                        log.info("Stream termination triggered by done marker from Ollama");
+                        log.info("takeUntil: Received done marker - will terminate stream after this response");
                     }
                     return Boolean.TRUE.equals(done);
                 })
+                // Now filter out done markers and invalid responses
                 .filter(response -> {
-                    // Now filter out done markers and invalid responses AFTER takeUntil has seen them
                     Boolean done = response.getDone();
                     if (Boolean.TRUE.equals(done)) {
-                        log.debug("Filtering out done marker (already processed by takeUntil)");
+                        log.info("Filtering out done marker (stream will complete after this)");
                         return false; // Don't emit done markers as content
                     }
                     
                     String responseText = response.getResponse();
-                    // Must have valid response content
                     if (responseText == null || responseText.trim().isEmpty()) {
                         log.debug("Empty response chunk, skipping");
                         return false;
                     }
                     
-                    // Skip if response contains refusal messages (but log first 200 chars)
+                    // Skip if response contains refusal messages
                     String lower = responseText.toLowerCase();
                     if (lower.contains("i'm sorry") || lower.contains("i can't") || 
                         lower.contains("cannot") || lower.contains("unable to") ||
@@ -126,28 +131,29 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                         return false;
                     }
                     
-                    log.debug("Accepting response chunk: {} chars", responseText.length());
+                    log.info("Accepting response chunk: {} chars", responseText.length());
                     return true;
                 })
                 .map(response -> {
                     if (response == null) {
-                        log.error("Unexpected null response in final map");
+                        log.error("Unexpected null response in map");
                         return "";
                     }
                     String resp = response.getResponse();
                     if (resp == null || resp.isEmpty()) {
-                        log.warn("Empty response in final map");
+                        log.warn("Empty response in map");
                         return "";
                     }
-                    log.debug("Mapping response chunk: {} chars", resp.length());
+                    log.info("Mapping to text chunk: {} chars", resp.length());
                     return resp;
                 })
                 .filter(text -> text != null && !text.trim().isEmpty())
-                .doOnNext(chunk -> log.debug("Final chunk being emitted: {} chars - {}", chunk.length(), chunk.substring(0, Math.min(50, chunk.length()))))
-                .doOnComplete(() -> log.info("Flux stream completed normally"))
+                .doOnNext(chunk -> log.info("Final chunk emitted: {} chars - {}", chunk.length(), 
+                    chunk.substring(0, Math.min(100, chunk.length()))))
+                .doOnComplete(() -> log.info("Flux stream completed normally - all chunks processed"))
                 .doOnError(error -> log.error("Flux stream error: {}", error.getMessage(), error))
                 .onErrorResume(error -> {
-                    log.error("Streaming error occurred, returning error message", error);
+                    log.error("Streaming error occurred, returning error message: {}", error.getMessage(), error);
                     return Flux.just("// Error generating code: " + error.getMessage() + "\n");
                 });
     }
@@ -287,18 +293,31 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                                 chunkCount.get(), fullCode.length());
                             
                             if (fullCode.length() == 0) {
-                                log.warn("Stream completed but no code was generated!");
-                                emitter.send(SseEmitter.event()
-                                        .name("error")
-                                        .data("No code was generated. Please check Ollama is running and the model is available."));
+                                log.warn("Stream completed but no code was generated after {} chunks!", chunkCount.get());
+                                try {
+                                    emitter.send(SseEmitter.event()
+                                            .name("error")
+                                            .data("No code was generated. Please check Ollama is running and the model is available."));
+                                    Thread.sleep(500);
+                                } catch (Exception ex) {
+                                    log.error("Error sending error event: {}", ex.getMessage());
+                                }
                             } else {
-                                emitter.send(SseEmitter.event()
-                                        .name("complete")
-                                        .data("Code generation completed"));
+                                log.info("Sending complete event with {} characters of code", fullCode.length());
+                                try {
+                                    emitter.send(SseEmitter.event()
+                                            .name("complete")
+                                            .data("Code generation completed"));
+                                    // Wait longer to ensure complete event is sent before closing
+                                    Thread.sleep(500);
+                                    log.info("Complete event sent, closing emitter...");
+                                } catch (Exception ex) {
+                                    log.error("Error sending complete event: {}", ex.getMessage(), ex);
+                                }
                             }
-                            Thread.sleep(100);
                             emitter.complete();
-                            log.info("SSE emitter completed successfully");
+                            log.info("SSE emitter completed successfully. Total: {} chunks, {} chars", 
+                                chunkCount.get(), fullCode.length());
                         } catch (Exception e) {
                             log.error("Error completing stream", e);
                             try {
@@ -340,34 +359,33 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                         try {
                             int count = chunkCount.incrementAndGet();
                             fullCode.append(chunk);
-                            log.debug("Sending chunk #{}: {} chars", count, chunk.length());
+                            log.info("Sending chunk #{}: {} chars", count, chunk.length());
                             
+                            // Send chunk with retry mechanism
                             emitter.send(SseEmitter.event()
                                     .name("code-chunk")
                                     .data(chunk));
                         } catch (IOException e) {
-                            log.error("Error sending chunk #{}", chunkCount.get(), e);
-                            try {
-                                emitter.completeWithError(e);
-                            } catch (Exception ex) {
-                                log.error("Error completing emitter with error", ex);
-                            }
+                            log.error("Error sending chunk #{}: {}", chunkCount.get(), e.getMessage(), e);
+                            // Don't complete on first error, just log it
+                        } catch (Exception e) {
+                            log.error("Unexpected error sending chunk #{}: {}", chunkCount.get(), e.getMessage(), e);
                         }
                     },
                     error -> {
-                        log.error("Error in stream after {} chunks", chunkCount.get(), error);
+                        log.error("Error in stream after {} chunks: {}", chunkCount.get(), error.getMessage(), error);
                         try {
                             emitter.send(SseEmitter.event()
                                     .name("error")
                                     .data("Error generating code: " + error.getMessage()));
-                            Thread.sleep(100);
+                            Thread.sleep(200); // Give time for error event to be sent
                             emitter.completeWithError(error);
                         } catch (Exception e) {
-                            log.error("Error sending error event", e);
+                            log.error("Error sending error event: {}", e.getMessage(), e);
                             try {
                                 emitter.completeWithError(error);
                             } catch (Exception ex) {
-                                log.error("Error completing emitter", ex);
+                                log.error("Error completing emitter: {}", ex.getMessage(), ex);
                             }
                         }
                     },
@@ -381,20 +399,24 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                                 emitter.send(SseEmitter.event()
                                         .name("error")
                                         .data("No code was generated. Please check Ollama is running and the model is available."));
+                                Thread.sleep(200);
+                                emitter.complete();
                             } else {
+                                // Send completion event and wait before closing
                                 emitter.send(SseEmitter.event()
                                         .name("complete")
                                         .data("Code generation completed"));
+                                log.info("Sent complete event, waiting before closing emitter...");
+                                Thread.sleep(300); // Wait longer to ensure complete event is sent
+                                emitter.complete();
+                                log.info("SSE emitter completed successfully");
                             }
-                            Thread.sleep(100);
-                            emitter.complete();
-                            log.info("SSE emitter completed successfully");
                         } catch (Exception e) {
-                            log.error("Error completing stream", e);
+                            log.error("Error completing stream: {}", e.getMessage(), e);
                             try {
                                 emitter.completeWithError(e);
                             } catch (Exception ex) {
-                                log.error("Error completing emitter with error", ex);
+                                log.error("Error completing emitter with error: {}", ex.getMessage(), ex);
                             }
                         }
                     }

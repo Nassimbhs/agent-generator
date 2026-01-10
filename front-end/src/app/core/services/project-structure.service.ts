@@ -17,8 +17,18 @@ export class ProjectStructureService {
   }
 
   downloadProject(structure: ProjectStructure): Observable<Blob> {
+    // Ensure structure has required fields
+    if (!structure || !structure.files || structure.files.length === 0) {
+      throw new Error('Project structure is empty');
+    }
+    
+    console.log('Sending download request with', structure.files.length, 'files');
+    
     return this.http.post(`${this.apiUrl}/download`, structure, {
-      responseType: 'blob'
+      responseType: 'blob',
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
   }
 
@@ -35,31 +45,57 @@ export class ProjectStructureService {
   }
 
   parseFilesFromCode(code: string): ProjectStructure | null {
+    if (!code || code.trim().length === 0) {
+      return null;
+    }
+    
     // Parse FILE: patterns from generated code
-    const filePattern = /FILE:\s*(.+?)\s*(?:```(\w+)?\s*)?\n((?:[^`]|`(?!``))*?)(?=```|FILE:|$)/gs;
+    // Pattern matches: FILE: path/to/file.ext\n```language\ncontent\n```
+    // or FILE: path/to/file.ext\ncontent (without code blocks)
+    // More flexible pattern to handle incomplete blocks
+    const filePattern = /FILE:\s*([^\n\r]+?)(?:\s*\r?\n)?(?:```(\w+)?\s*\r?\n)?([\s\S]*?)(?:```|(?=FILE:|$))/gi;
     const files: any[] = [];
     let match;
+    let lastIndex = 0;
 
     while ((match = filePattern.exec(code)) !== null) {
-      const path = match[1].trim();
+      const path = match[1]?.trim();
       const language = match[2]?.trim() || this.detectLanguage(path);
-      const content = match[3].trim();
-      const name = path.split('/').pop() || path;
+      // Content is in group 3 (the entire content after FILE: and optional language)
+      const content = (match[3] || '').trim();
+      const name = path ? path.split('/').pop() || path.split('\\').pop() || path : '';
 
       if (path && content) {
         files.push({
-          path,
+          path: path.replace(/\\/g, '/'), // Normalize path separators
           name,
           content,
           language,
           type: 'file'
         });
+        console.log('Parsed file:', path, 'Language:', language, 'Content length:', content.length);
       }
+      lastIndex = match.index + match[0].length;
+    }
+    
+    // If no FILE: patterns found but we have code, treat entire code as single file
+    if (files.length === 0 && code.trim().length > 50) {
+      console.log('No FILE: patterns found, treating entire code as single file');
+      files.push({
+        path: 'generated-code.txt',
+        name: 'generated-code.txt',
+        content: code.trim(),
+        language: 'text',
+        type: 'file'
+      });
     }
 
     if (files.length === 0) {
+      console.log('No files parsed from code');
       return null;
     }
+    
+    console.log('Parsed', files.length, 'files from code');
 
     // Build tree structure
     const root: any = {

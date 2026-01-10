@@ -150,67 +150,73 @@ import { AuthService } from '../../core/services/auth.service';
                 <p-tabPanel header="Backend Code (Live)">
                   <div class="grid">
                     <!-- File Tree -->
-                    <div class="col-12 md:col-3 border-right-1 surface-border">
-                      <div class="flex justify-content-between align-items-center mb-2">
+                    <div class="col-12 lg:col-4 md:col-3 border-right-1 surface-border pr-3 tree-panel">
+                      <div class="flex justify-content-between align-items-center mb-2 sticky top-0 bg-white z-1 pb-2">
                         <h4 class="m-0 text-sm font-semibold">Project Structure</h4>
                         @if (backendProjectStructure) {
                           <p-button 
-                            label="Download ZIP" 
+                            label="ZIP" 
                             icon="pi pi-download"
                             size="small"
                             [text]="true"
+                            pTooltip="Download as ZIP"
+                            tooltipPosition="left"
                             (onClick)="downloadProjectZip(backendProjectStructure)">
                           </p-button>
                         }
                       </div>
                       @if (backendTreeNodes && backendTreeNodes.length > 0) {
-                        <p-tree 
-                          [value]="backendTreeNodes" 
-                          selectionMode="single"
-                          [(selection)]="selectedBackendFile"
-                          (onNodeSelect)="onBackendFileSelect($event)"
-                          styleClass="w-full text-sm">
-                          <ng-template let-node pTemplate="default">
-                            <span class="flex align-items-center gap-2">
-                              <i [class]="node.icon"></i>
-                              <span>{{ node.label }}</span>
-                            </span>
-                          </ng-template>
-                        </p-tree>
+                        <div class="tree-container">
+                          <p-tree 
+                            [value]="backendTreeNodes" 
+                            selectionMode="single"
+                            [(selection)]="selectedBackendFile"
+                            (onNodeSelect)="onBackendFileSelect($event)"
+                            styleClass="w-full text-sm project-tree">
+                            <ng-template let-node pTemplate="default">
+                              <span class="flex align-items-center gap-2 tree-node">
+                                <i [class]="node.icon" class="tree-icon"></i>
+                                <span class="tree-label">{{ node.label }}</span>
+                              </span>
+                            </ng-template>
+                          </p-tree>
+                        </div>
                       } @else {
                         <p class="text-color-secondary text-sm text-center p-4">No files parsed yet</p>
                       }
                     </div>
                     
                     <!-- Code Display -->
-                    <div class="col-12 md:col-9">
-                      <div class="relative">
-                        @if (streamingBackend) {
-                          <div class="absolute top-0 right-0 z-1 p-2">
-                            <span class="text-xs bg-primary text-white border-round px-2 py-1">
-                              <i class="pi pi-circle-fill mr-1" style="animation: blink 1s infinite;"></i>
-                              LIVE
-                            </span>
+                    <div class="col-12 lg:col-8 md:col-9">
+                      <div class="relative code-display-container">
+                        <div class="flex flex-column md:flex-row justify-content-between align-items-center mb-2 sticky top-0 bg-white z-1 pb-2 gap-2">
+                          <div class="flex align-items-center gap-2 flex-wrap">
+                            @if (streamingBackend) {
+                              <span class="text-xs bg-primary text-white border-round px-2 py-1">
+                                <i class="pi pi-circle-fill mr-1" style="animation: blink 1s infinite;"></i>
+                                LIVE
+                              </span>
+                            }
+                            @if (selectedBackendFile) {
+                              <span class="text-sm font-semibold text-color-secondary">FILE: {{ selectedBackendFile.data || 'generated-code.txt' }}</span>
+                            } @else if (backendCode) {
+                              <span class="text-sm font-semibold text-color-secondary">Generated Code ({{ backendCode.length }} chars)</span>
+                            }
                           </div>
-                        }
-                        @if (selectedBackendFile) {
-                          <div class="mb-2">
-                            <p class="text-sm font-semibold m-0">FILE: {{ selectedBackendFile.data || 'generated-code.txt' }}</p>
-                          </div>
-                        }
-                        <div class="flex justify-content-end mb-2">
                           <p-button 
                             label="Copy" 
                             icon="pi pi-copy"
                             size="small"
                             [text]="true"
-                            [disabled]="streamingBackend"
+                            [disabled]="streamingBackend || (!selectedBackendFileContent && !backendCode)"
                             (onClick)="copyToClipboard(selectedBackendFileContent || backendCode)">
                           </p-button>
                         </div>
-                        <pre class="p-4 m-0 bg-gray-900 text-green-400 border-round text-sm line-height-3 overflow-auto font-mono" 
-                             style="max-height: 600px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace;"
-                             id="backend-code">{{ selectedBackendFileContent || backendCode }}@if (streamingBackend) {<span class="text-white animate-blink">|</span>}</pre>
+                        <div class="code-viewer">
+                          <pre class="p-4 m-0 bg-gray-900 text-green-400 border-round text-sm line-height-3 font-mono code-content" 
+                               style="white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; min-height: 200px;"
+                               id="backend-code">{{ selectedBackendFileContent || backendCode }}@if (streamingBackend) {<span class="text-white animate-blink">|</span>}</pre>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -221,67 +227,73 @@ import { AuthService } from '../../core/services/auth.service';
                 <p-tabPanel header="Frontend Code (Live)">
                   <div class="grid">
                     <!-- File Tree -->
-                    <div class="col-12 md:col-3 border-right-1 surface-border">
-                      <div class="flex justify-content-between align-items-center mb-2">
+                    <div class="col-12 lg:col-4 md:col-3 border-right-1 surface-border pr-3 tree-panel">
+                      <div class="flex justify-content-between align-items-center mb-2 sticky top-0 bg-white z-1 pb-2">
                         <h4 class="m-0 text-sm font-semibold">Project Structure</h4>
                         @if (frontendProjectStructure) {
                           <p-button 
-                            label="Download ZIP" 
+                            label="ZIP" 
                             icon="pi pi-download"
                             size="small"
                             [text]="true"
+                            pTooltip="Download as ZIP"
+                            tooltipPosition="left"
                             (onClick)="downloadProjectZip(frontendProjectStructure)">
                           </p-button>
                         }
                       </div>
                       @if (frontendTreeNodes && frontendTreeNodes.length > 0) {
-                        <p-tree 
-                          [value]="frontendTreeNodes" 
-                          selectionMode="single"
-                          [(selection)]="selectedFrontendFile"
-                          (onNodeSelect)="onFrontendFileSelect($event)"
-                          styleClass="w-full text-sm">
-                          <ng-template let-node pTemplate="default">
-                            <span class="flex align-items-center gap-2">
-                              <i [class]="node.icon"></i>
-                              <span>{{ node.label }}</span>
-                            </span>
-                          </ng-template>
-                        </p-tree>
+                        <div class="tree-container">
+                          <p-tree 
+                            [value]="frontendTreeNodes" 
+                            selectionMode="single"
+                            [(selection)]="selectedFrontendFile"
+                            (onNodeSelect)="onFrontendFileSelect($event)"
+                            styleClass="w-full text-sm project-tree">
+                            <ng-template let-node pTemplate="default">
+                              <span class="flex align-items-center gap-2 tree-node">
+                                <i [class]="node.icon" class="tree-icon"></i>
+                                <span class="tree-label">{{ node.label }}</span>
+                              </span>
+                            </ng-template>
+                          </p-tree>
+                        </div>
                       } @else {
                         <p class="text-color-secondary text-sm text-center p-4">No files parsed yet</p>
                       }
                     </div>
                     
                     <!-- Code Display -->
-                    <div class="col-12 md:col-9">
-                      <div class="relative">
-                        @if (streamingFrontend) {
-                          <div class="absolute top-0 right-0 z-1 p-2">
-                            <span class="text-xs bg-primary text-white border-round px-2 py-1">
-                              <i class="pi pi-circle-fill mr-1" style="animation: blink 1s infinite;"></i>
-                              LIVE
-                            </span>
+                    <div class="col-12 lg:col-8 md:col-9">
+                      <div class="relative code-display-container">
+                        <div class="flex flex-column md:flex-row justify-content-between align-items-center mb-2 sticky top-0 bg-white z-1 pb-2 gap-2">
+                          <div class="flex align-items-center gap-2 flex-wrap">
+                            @if (streamingFrontend) {
+                              <span class="text-xs bg-primary text-white border-round px-2 py-1">
+                                <i class="pi pi-circle-fill mr-1" style="animation: blink 1s infinite;"></i>
+                                LIVE
+                              </span>
+                            }
+                            @if (selectedFrontendFile) {
+                              <span class="text-sm font-semibold text-color-secondary">FILE: {{ selectedFrontendFile.data || 'generated-code.txt' }}</span>
+                            } @else if (frontendCode) {
+                              <span class="text-sm font-semibold text-color-secondary">Generated Code ({{ frontendCode.length }} chars)</span>
+                            }
                           </div>
-                        }
-                        @if (selectedFrontendFile) {
-                          <div class="mb-2">
-                            <p class="text-sm font-semibold m-0">FILE: {{ selectedFrontendFile.data || 'generated-code.txt' }}</p>
-                          </div>
-                        }
-                        <div class="flex justify-content-end mb-2">
                           <p-button 
                             label="Copy" 
                             icon="pi pi-copy"
                             size="small"
                             [text]="true"
-                            [disabled]="streamingFrontend"
+                            [disabled]="streamingFrontend || (!selectedFrontendFileContent && !frontendCode)"
                             (onClick)="copyToClipboard(selectedFrontendFileContent || frontendCode)">
                           </p-button>
                         </div>
-                        <pre class="p-4 m-0 bg-gray-900 text-blue-400 border-round text-sm line-height-3 overflow-auto font-mono" 
-                             style="max-height: 600px; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace;"
-                             id="frontend-code">{{ selectedFrontendFileContent || frontendCode }}@if (streamingFrontend) {<span class="text-white animate-blink">|</span>}</pre>
+                        <div class="code-viewer">
+                          <pre class="p-4 m-0 bg-gray-900 text-blue-400 border-round text-sm line-height-3 font-mono code-content" 
+                               style="white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; min-height: 200px;"
+                               id="frontend-code">{{ selectedFrontendFileContent || frontendCode }}@if (streamingFrontend) {<span class="text-white animate-blink">|</span>}</pre>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -302,6 +314,196 @@ import { AuthService } from '../../core/services/auth.service';
     }
     .animate-blink {
       animation: blink 1s infinite;
+    }
+    
+    /* Responsive Tree Panel */
+    .tree-panel {
+      max-height: 600px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .tree-container {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: calc(600px - 60px);
+      scrollbar-width: thin;
+      scrollbar-color: #cbd5e0 #f7fafc;
+    }
+    
+    .tree-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .tree-container::-webkit-scrollbar-track {
+      background: #f7fafc;
+      border-radius: 3px;
+    }
+    
+    .tree-container::-webkit-scrollbar-thumb {
+      background: #cbd5e0;
+      border-radius: 3px;
+    }
+    
+    .tree-container::-webkit-scrollbar-thumb:hover {
+      background: #a0aec0;
+    }
+    
+    .project-tree ::ng-deep .p-tree {
+      font-size: 0.875rem;
+    }
+    
+    .project-tree ::ng-deep .p-tree .p-treenode {
+      padding: 0.25rem 0;
+    }
+    
+    .project-tree ::ng-deep .p-tree .p-treenode-content {
+      padding: 0.375rem 0.5rem;
+      border-radius: 4px;
+      transition: background-color 0.2s;
+      cursor: pointer;
+    }
+    
+    .project-tree ::ng-deep .p-tree .p-treenode-content:hover {
+      background-color: #f3f4f6;
+    }
+    
+    .project-tree ::ng-deep .p-tree .p-treenode-content.p-highlight {
+      background-color: #dbeafe;
+      color: #1e40af;
+    }
+    
+    .tree-node {
+      width: 100%;
+      overflow: hidden;
+      min-width: 0;
+    }
+    
+    .tree-icon {
+      font-size: 0.875rem;
+      min-width: 1rem;
+      flex-shrink: 0;
+    }
+    
+    .tree-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0;
+    }
+    
+    /* Responsive Code Display */
+    .code-display-container {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      max-height: 600px;
+    }
+    
+    .code-viewer {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: auto;
+      max-height: calc(600px - 80px);
+      scrollbar-width: thin;
+      scrollbar-color: #4a5568 #2d3748;
+    }
+    
+    .code-viewer::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    .code-viewer::-webkit-scrollbar-track {
+      background: #2d3748;
+      border-radius: 4px;
+    }
+    
+    .code-viewer::-webkit-scrollbar-thumb {
+      background: #4a5568;
+      border-radius: 4px;
+    }
+    
+    .code-viewer::-webkit-scrollbar-thumb:hover {
+      background: #718096;
+    }
+    
+    .code-content {
+      margin: 0;
+      padding: 1rem;
+    }
+    
+    /* Responsive Breakpoints */
+    @media (max-width: 1024px) {
+      .tree-panel {
+        max-height: 400px;
+      }
+      
+      .tree-container {
+        max-height: calc(400px - 60px);
+      }
+      
+      .code-display-container {
+        max-height: 400px;
+      }
+      
+      .code-viewer {
+        max-height: calc(400px - 80px);
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .tree-panel {
+        max-height: 300px;
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+      }
+      
+      .tree-container {
+        max-height: calc(300px - 60px);
+      }
+      
+      .code-display-container .sticky {
+        position: relative;
+      }
+      
+      .code-display-container {
+        max-height: 400px;
+      }
+      
+      .code-viewer {
+        max-height: calc(400px - 80px);
+      }
+      
+      .code-content {
+        font-size: 0.75rem;
+        padding: 0.75rem;
+      }
+      
+      .tree-label {
+        font-size: 0.8125rem;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .tree-panel {
+        max-height: 250px;
+      }
+      
+      .tree-container {
+        max-height: calc(250px - 60px);
+      }
+      
+      .code-content {
+        font-size: 0.7rem;
+        padding: 0.5rem;
+        line-height: 1.5;
+      }
     }
   `]
 })
@@ -426,22 +628,46 @@ export class GeneratorComponent implements OnDestroy {
     this.eventSource = new EventSource(url);
 
     this.eventSource.addEventListener('code-chunk', (event: MessageEvent) => {
-      this.backendCode += event.data;
-      this.updateBackendProjectStructure();
-      this.scrollToBottom('backend-code');
+      console.log('Received code-chunk event, data length:', event.data?.length);
+      if (event.data) {
+        this.backendCode += event.data;
+        console.log('Total backend code length now:', this.backendCode.length);
+        this.updateBackendProjectStructure();
+        this.scrollToBottom('backend-code');
+      }
     });
 
+    let completed = false;
+    
     this.eventSource.addEventListener('complete', () => {
-      this.eventSource?.close();
+      if (completed) return; // Prevent duplicate calls
+      completed = true;
+      
+      console.log('Received complete event. Total code length:', this.backendCode.length);
       this.streamingBackend = false;
       this.promptControl?.enable();
       this.stopProgressTimer();
       this.updateBackendProjectStructure();
-      this.messageService.add({ 
-        severity: 'success', 
-        summary: 'Success', 
-        detail: 'Backend code generated successfully!' 
-      });
+      
+      // Wait a bit before closing to ensure all chunks are processed
+      setTimeout(() => {
+        if (this.eventSource) {
+          this.eventSource.close();
+        }
+        if (this.backendCode.length > 0) {
+          this.messageService.add({ 
+            severity: 'success', 
+            summary: 'Success', 
+            detail: `Backend code generated successfully! (${this.backendCode.length} characters)` 
+          });
+        } else {
+          this.messageService.add({ 
+            severity: 'warn', 
+            summary: 'Warning', 
+            detail: 'Stream completed but no code was received.' 
+          });
+        }
+      }, 500);
     });
 
     this.eventSource.addEventListener('error', (event: MessageEvent) => {
@@ -455,32 +681,50 @@ export class GeneratorComponent implements OnDestroy {
     });
 
     this.eventSource.onmessage = (event) => {
-      this.backendCode += event.data;
-      this.updateBackendProjectStructure();
-      this.scrollToBottom('backend-code');
+      console.log('Received SSE message (no event name):', event.data?.substring(0, 100));
+      // Fallback for messages without event name
+      if (event.data && !event.data.includes('complete') && !event.data.includes('error')) {
+        this.backendCode += event.data;
+        this.updateBackendProjectStructure();
+        this.scrollToBottom('backend-code');
+      }
     };
 
     this.eventSource.onerror = (error: any) => {
       console.error('EventSource error:', error, 'ReadyState:', this.eventSource?.readyState);
-      // EventSource.onerror fires when connection is closed, even on success
-      // Only treat as error if readyState is CLOSED (2) and we didn't receive complete event
-      if (this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
-        // Check if we received any data
-        if (this.backendCode.length === 0 && this.streamingBackend) {
-          this.eventSource?.close();
-          this.streamingBackend = false;
-          this.promptControl?.enable();
-          this.stopProgressTimer();
-          this.messageService.add({ 
-            severity: 'error', 
-            summary: 'Connection Error', 
-            detail: 'Failed to connect to server. Please check if the backend is running at ' + environment.apiUrl + ' and you are logged in.' 
-          });
-        } else {
-          // Stream completed normally (we have data)
-          this.streamingBackend = false;
-          this.promptControl?.enable();
-          this.stopProgressTimer();
+      
+      // EventSource.onerror fires multiple times during connection lifecycle
+      // CONNECTING (0) = initial connection
+      // OPEN (1) = connected
+      // CLOSED (2) = closed
+      
+      if (this.eventSource) {
+        const readyState = this.eventSource.readyState;
+        
+        if (readyState === EventSource.CLOSED && this.streamingBackend && !completed) {
+          // Connection closed unexpectedly
+          if (this.backendCode.length === 0) {
+            // No data received - real error
+            this.streamingBackend = false;
+            this.promptControl?.enable();
+            this.stopProgressTimer();
+            this.eventSource.close();
+            this.messageService.add({ 
+              severity: 'error', 
+              summary: 'Connection Error', 
+              detail: 'Connection closed unexpectedly. Please check if the backend is running and try again.' 
+            });
+          } else {
+            // We have some data - might be normal completion
+            console.log('Connection closed but we have data:', this.backendCode.length, 'chars');
+            // Don't show error, let the complete handler take care of it
+          }
+        } else if (readyState === EventSource.CONNECTING) {
+          // Still connecting, wait
+          console.log('EventSource still connecting...');
+        } else if (readyState === EventSource.OPEN) {
+          // Connection open, error might be temporary
+          console.log('EventSource connection open, temporary error?');
         }
       }
     };
@@ -504,22 +748,43 @@ export class GeneratorComponent implements OnDestroy {
     const frontendEventSource = new EventSource(url);
 
     frontendEventSource.addEventListener('code-chunk', (event: MessageEvent) => {
-      this.frontendCode += event.data;
-      this.updateFrontendProjectStructure();
-      this.scrollToBottom('frontend-code');
+      console.log('Received code-chunk event, data length:', event.data?.length);
+      if (event.data) {
+        this.frontendCode += event.data;
+        console.log('Total frontend code length now:', this.frontendCode.length);
+        this.updateFrontendProjectStructure();
+        this.scrollToBottom('frontend-code');
+      }
     });
 
+    let frontendCompleted = false;
+    
     frontendEventSource.addEventListener('complete', () => {
-      frontendEventSource.close();
+      if (frontendCompleted) return;
+      frontendCompleted = true;
+      
+      console.log('Received complete event. Total code length:', this.frontendCode.length);
       this.streamingFrontend = false;
       this.promptControl?.enable();
       this.stopProgressTimer();
       this.updateFrontendProjectStructure();
-      this.messageService.add({ 
-        severity: 'success', 
-        summary: 'Success', 
-        detail: 'Frontend code generated successfully!' 
-      });
+      
+      setTimeout(() => {
+        frontendEventSource.close();
+        if (this.frontendCode.length > 0) {
+          this.messageService.add({ 
+            severity: 'success', 
+            summary: 'Success', 
+            detail: `Frontend code generated successfully! (${this.frontendCode.length} characters)`
+          });
+        } else {
+          this.messageService.add({ 
+            severity: 'warn', 
+            summary: 'Warning', 
+            detail: 'Stream completed but no code was received.' 
+          });
+        }
+      }, 500);
     });
 
     frontendEventSource.addEventListener('error', (event: MessageEvent) => {
@@ -533,9 +798,13 @@ export class GeneratorComponent implements OnDestroy {
     });
 
     frontendEventSource.onmessage = (event) => {
-      this.frontendCode += event.data;
-      this.updateFrontendProjectStructure();
-      this.scrollToBottom('frontend-code');
+      console.log('Received SSE message (no event name):', event.data?.substring(0, 100));
+      // Fallback for messages without event name
+      if (event.data && !event.data.includes('complete') && !event.data.includes('error')) {
+        this.frontendCode += event.data;
+        this.updateFrontendProjectStructure();
+        this.scrollToBottom('frontend-code');
+      }
     };
 
     frontendEventSource.onerror = (error) => {
@@ -755,25 +1024,47 @@ export class GeneratorComponent implements OnDestroy {
   }
 
   downloadProjectZip(structure: ProjectStructure): void {
+    if (!structure || !structure.files || structure.files.length === 0) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'Warning',
+        detail: 'No files to download. Please generate code first.'
+      });
+      return;
+    }
+    
+    console.log('Downloading project ZIP with', structure.files.length, 'files');
+    
     this.projectStructureService.downloadProject(structure).subscribe({
       next: (blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'project.zip';
-        a.click();
-        window.URL.revokeObjectURL(url);
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Downloaded',
-          detail: 'Project ZIP downloaded successfully'
-        });
+        if (blob && blob.size > 0) {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'project.zip';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Downloaded',
+            detail: `Project ZIP downloaded successfully (${(blob.size / 1024).toFixed(2)} KB)`
+          });
+        } else {
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: 'Downloaded file is empty. Please try again.'
+          });
+        }
       },
-      error: () => {
+      error: (error) => {
+        console.error('Download error:', error);
         this.messageService.add({
           severity: 'error',
           summary: 'Error',
-          detail: 'Failed to download project ZIP'
+          detail: `Failed to download project ZIP: ${error.message || 'Unknown error'}`
         });
       }
     });

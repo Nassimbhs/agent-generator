@@ -13,8 +13,16 @@ import java.util.regex.Pattern;
 @Slf4j
 public class ProjectParserService {
 
+    // More flexible pattern that handles:
+    // FILE: path/to/file.ext
+    // ```language
+    // content
+    // ```
+    // OR
+    // FILE: path/to/file.ext
+    // content (without code blocks)
     private static final Pattern FILE_PATTERN = Pattern.compile(
-        "(?i)FILE:\\s*(.+?)\\s*(?:```(\\w+)?\\s*)?\\n((?:[^`]|`(?!``))*)```",
+        "(?i)FILE:\\s*([^\\n\\r]+?)\\s*(?:\\r?\\n)?(?:```(\\w+)?\\s*\\r?\\n)?([\\s\\S]*?)(?:```|(?=FILE:|$))",
         Pattern.DOTALL | Pattern.MULTILINE
     );
 
