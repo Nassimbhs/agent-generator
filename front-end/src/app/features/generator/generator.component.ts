@@ -169,7 +169,6 @@ import { AuthService } from '../../core/services/auth.service';
                           selectionMode="single"
                           [(selection)]="selectedBackendFile"
                           (onNodeSelect)="onBackendFileSelect($event)"
-                          [expandedKeys]="expandedKeys"
                           styleClass="w-full text-sm">
                           <ng-template let-node pTemplate="default">
                             <span class="flex align-items-center gap-2">
@@ -241,7 +240,6 @@ import { AuthService } from '../../core/services/auth.service';
                           selectionMode="single"
                           [(selection)]="selectedFrontendFile"
                           (onNodeSelect)="onFrontendFileSelect($event)"
-                          [expandedKeys]="expandedKeys"
                           styleClass="w-full text-sm">
                           <ng-template let-node pTemplate="default">
                             <span class="flex align-items-center gap-2">
@@ -326,7 +324,6 @@ export class GeneratorComponent implements OnDestroy {
   selectedFrontendFile: TreeNode | null = null;
   selectedBackendFileContent = '';
   selectedFrontendFileContent = '';
-  expandedKeys: { [key: string]: boolean } = {};
 
   private progressInterval: any;
   private eventSource: EventSource | null = null;
@@ -650,9 +647,7 @@ export class GeneratorComponent implements OnDestroy {
 
   private expandAllFolders(node: any): void {
     if (node.type === 'folder' && node.children) {
-      if (node.key) {
-        this.expandedKeys[node.key] = true;
-      }
+      node.expanded = true;
       node.children.forEach((child: any) => this.expandAllFolders(child));
     }
   }

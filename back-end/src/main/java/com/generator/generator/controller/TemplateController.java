@@ -76,30 +76,32 @@ public class TemplateController {
                 .name("pom.xml")
                 .language("xml")
                 .type("file")
-                .content("""<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
-         https://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.1</version>
-    </parent>
-    <groupId>com.example</groupId>
-    <artifactId>demo</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <properties>
-        <java.version>17</java.version>
-    </properties>
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-    </dependencies>
-</project>""")
+                .content("""
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <project xmlns="http://maven.apache.org/POM/4.0.0"
+                             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                             xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 
+                             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+                        <modelVersion>4.0.0</modelVersion>
+                        <parent>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-starter-parent</artifactId>
+                            <version>4.0.1</version>
+                        </parent>
+                        <groupId>com.example</groupId>
+                        <artifactId>demo</artifactId>
+                        <version>0.0.1-SNAPSHOT</version>
+                        <properties>
+                            <java.version>17</java.version>
+                        </properties>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.springframework.boot</groupId>
+                                <artifactId>spring-boot-starter-web</artifactId>
+                            </dependency>
+                        </dependencies>
+                    </project>
+                    """)
                 .build());
 
         files.add(com.generator.generator.dto.ProjectFile.builder()
@@ -107,17 +109,19 @@ public class TemplateController {
                 .name("DemoApplication.java")
                 .language("java")
                 .type("file")
-                .content("""package com.example.demo;
+                .content("""
+                    package com.example.demo;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+                    import org.springframework.boot.SpringApplication;
+                    import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@SpringBootApplication
-public class DemoApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(DemoApplication.class, args);
-    }
-}""")
+                    @SpringBootApplication
+                    public class DemoApplication {
+                        public static void main(String[] args) {
+                            SpringApplication.run(DemoApplication.class, args);
+                        }
+                    }
+                    """)
                 .build());
 
         files.add(com.generator.generator.dto.ProjectFile.builder()
@@ -125,8 +129,10 @@ public class DemoApplication {
                 .name("application.properties")
                 .language("properties")
                 .type("file")
-                .content("""server.port=8080
-spring.application.name=demo""")
+                .content("""
+                    server.port=8080
+                    spring.application.name=demo
+                    """)
                 .build());
 
         files.add(com.generator.generator.dto.ProjectFile.builder()
@@ -134,10 +140,11 @@ spring.application.name=demo""")
                 .name("README.md")
                 .language("markdown")
                 .type("file")
-                .content("""# Spring Boot Application
+                .content("""
+                    # Spring Boot Application
 
-Empty Spring Boot project template.
-""")
+                    Empty Spring Boot project template.
+                    """)
                 .build());
 
         return structureService.buildProjectStructure(
@@ -156,19 +163,21 @@ Empty Spring Boot project template.
                 .name("index.html")
                 .language("html")
                 .type("file")
-                .content("""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My App</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div id="app"></div>
-    <script src="app.js"></script>
-</body>
-</html>""")
+                .content("""
+                    <!DOCTYPE html>
+                    <html lang="en">
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>My App</title>
+                        <link rel="stylesheet" href="styles.css">
+                    </head>
+                    <body>
+                        <div id="app"></div>
+                        <script src="app.js"></script>
+                    </body>
+                    </html>
+                    """)
                 .build());
 
         files.add(com.generator.generator.dto.ProjectFile.builder()
@@ -176,22 +185,24 @@ Empty Spring Boot project template.
                 .name("styles.css")
                 .language("css")
                 .type("file")
-                .content("""* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+                .content("""
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
 
-body {
-    font-family: Arial, sans-serif;
-    line-height: 1.6;
-}
+                    body {
+                        font-family: Arial, sans-serif;
+                        line-height: 1.6;
+                    }
 
-#app {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
-}""")
+                    #app {
+                        max-width: 1200px;
+                        margin: 0 auto;
+                        padding: 20px;
+                    }
+                    """)
                 .build());
 
         files.add(com.generator.generator.dto.ProjectFile.builder()
@@ -199,10 +210,12 @@ body {
                 .name("app.js")
                 .language("javascript")
                 .type("file")
-                .content("""// Your JavaScript code here
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('App loaded');
-});""")
+                .content("""
+                    // Your JavaScript code here
+                    document.addEventListener('DOMContentLoaded', function() {
+                        console.log('App loaded');
+                    });
+                    """)
                 .build());
 
         files.add(com.generator.generator.dto.ProjectFile.builder()
@@ -210,15 +223,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 .name("package.json")
                 .language("json")
                 .type("file")
-                .content("""{
-  "name": "my-app",
-  "version": "1.0.0",
-  "description": "Frontend application",
-  "main": "app.js",
-  "scripts": {
-    "start": "npx http-server . -p 8080"
-  }
-}""")
+                .content("""
+                    {
+                      "name": "my-app",
+                      "version": "1.0.0",
+                      "description": "Frontend application",
+                      "main": "app.js",
+                      "scripts": {
+                        "start": "npx http-server . -p 8080"
+                      }
+                    }
+                    """)
                 .build());
 
         files.add(com.generator.generator.dto.ProjectFile.builder()
@@ -226,17 +241,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 .name("README.md")
                 .language("markdown")
                 .type("file")
-                .content("""# Frontend Application
+                .content("""
+                    # Frontend Application
 
-Empty frontend project template.
+                    Empty frontend project template.
 
-## Getting Started
+                    ## Getting Started
 
-Run the application:
-\`\`\`bash
-npm start
-\`\`\`
-""")
+                    Run the application:
+                    ```bash
+                    npm start
+                    ```
+                    """)
                 .build());
 
         return structureService.buildProjectStructure(
