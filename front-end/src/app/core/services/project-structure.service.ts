@@ -76,29 +76,44 @@ export class ProjectStructureService {
     // content here (incomplete)
     
     const files: any[] = [];
-    const filePattern = /FILE:\s*([^\n\r]+?)(?:\r?\n)(?:```(\w+)?\s*\r?\n)?([\s\S]*?)(?:```(?:\s*\r?\n|$)|(?=\s*FILE:)|$)/gi;
+    
+    // More precise pattern that matches:
+    // FILE: path (on same line, until newline - MUST end at newline, not at ```)
+    // Then optional ```language on new line
+    // Then content until closing ``` or next FILE:
+    // CRITICAL: Path must end with newline, and ``` must be on new line
+    // Pattern: FILE: path\n```language\ncontent\n```
+    const filePattern = /(?:^|\r?\n)\s*FILE:\s*([^\n\r```]+?)\s*(?:\r?\n)\s*(?:```(\w+)?\s*\r?\n)?([\s\S]*?)(?:```(?:\s*\r?\n|$)|(?=(?:^|\r?\n)\s*FILE:)|$)/gim;
     
     let match;
     let lastMatchIndex = 0;
 
     while ((match = filePattern.exec(code)) !== null) {
-      // Group 1: File path (everything after FILE: until newline)
+      // Group 1: File path (everything after FILE: until newline, must not contain ```)
       let path = (match[1] || '').trim();
+      
+      // CRITICAL: Remove any code block markers that might have leaked into path
+      path = path.replace(/```/g, '').trim();
+      
+      // Remove any invalid characters from path (but keep valid path chars)
+      // Path should only contain: letters, numbers, dots, slashes, hyphens, underscores, spaces
+      path = path.replace(/[<>:"|?*\x00-\x1f```]/g, '').trim();
+      
+      // Skip if path contains suspicious patterns that suggest it captured content
+      if (path.includes('xmlns') || path.includes('package') || path.includes('import') || 
+          path.length > 200 || path.match(/\n|\r/)) {
+        console.warn('Skipping invalid path (likely captured content):', path.substring(0, 50));
+        continue;
+      }
+      
       // Group 2: Language (optional, from ```language)
       let language = (match[2] || '').trim();
-      // Group 3: Content (everything after language marker or directly after path)
+      
+      // Group 3: Content (everything after language marker)
       let content = (match[3] || '').trim();
       
       // Remove closing backticks if present in content
       content = content.replace(/```\s*$/gm, '').trim();
-      
-      // Clean up path - only keep valid path characters
-      if (path) {
-        // Don't remove too much - just clean leading/trailing whitespace and normalize
-        path = path.trim();
-        // Remove any characters that aren't valid in file paths (but keep dots, slashes, hyphens, underscores)
-        path = path.replace(/[<>:"|?*\x00-\x1f]/g, '').trim();
-      }
       
       // If no language was detected from code block, detect from file extension
       if (!language && path) {
@@ -106,35 +121,40 @@ export class ProjectStructureService {
       }
       
       // Extract filename from path (last segment)
-      const pathParts = path.split('/').filter(p => p && p.trim().length > 0);
+      const pathParts = path.split('/').filter((p: string) => p && p.trim().length > 0 && !p.includes('```'));
       const name = pathParts.length > 0 ? pathParts[pathParts.length - 1] : path || 'unknown';
+      
+      // Clean name - remove any code block markers
+      const cleanName = name.replace(/```/g, '').trim();
 
-      // Only add if we have a valid path
-      if (path && path.length > 0) {
-        // During streaming, content might be empty or incomplete - that's OK
-        // But ensure we have at least a minimal path structure
+      // Only add if we have a valid path that looks like a file path
+      if (path && path.length > 0 && path.length < 500 && 
+          (path.includes('/') || path.includes('.') || path.match(/^[\w\.-]+$/))) {
+        
         const normalizedPath = path.replace(/\\/g, '/');
         
         // Check if this file already exists (during streaming, same file might be parsed multiple times)
         const existingIndex = files.findIndex(f => f.path === normalizedPath);
         const fileData = {
           path: normalizedPath,
-          name: name,
-          content: content, // Can be empty during streaming
+          name: cleanName,
+          content: content,
           language: language || 'text',
           type: 'file'
         };
         
         if (existingIndex >= 0) {
-          // Update existing file with more complete content
-          files[existingIndex] = fileData;
-          console.log('Updated file:', normalizedPath, 'Content length:', content.length);
+          // Update existing file with more complete content (only if new content is longer)
+          if (content.length > files[existingIndex].content.length) {
+            files[existingIndex] = fileData;
+            console.log('Updated file:', normalizedPath, 'Content length:', content.length);
+          }
         } else {
           files.push(fileData);
-          console.log('Parsed file:', normalizedPath, 'Name:', name, 'Language:', language || 'auto', 'Content length:', content.length);
+          console.log('Parsed file:', normalizedPath, 'Name:', cleanName, 'Language:', language || 'auto', 'Content length:', content.length);
         }
       } else {
-        console.warn('Skipping file with invalid path:', match[0]?.substring(0, 100));
+        console.warn('Skipping file with invalid path:', path.substring(0, 100));
       }
       
       lastMatchIndex = match.index + match[0].length;
