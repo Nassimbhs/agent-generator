@@ -80,13 +80,21 @@ public class GeneratorController {
                     },
                     () -> {
                         try {
+                            log.info("Stream completed, sending final event");
                             emitter.send(SseEmitter.event()
                                     .name("complete")
                                     .data("Code generation completed"));
+                            // Small delay before completing to ensure last event is sent
+                            Thread.sleep(100);
                             emitter.complete();
+                            log.info("SSE emitter completed successfully");
                         } catch (Exception e) {
                             log.error("Error completing stream", e);
-                            emitter.completeWithError(e);
+                            try {
+                                emitter.completeWithError(e);
+                            } catch (Exception ex) {
+                                log.error("Error completing emitter with error", ex);
+                            }
                         }
                     }
                 );
@@ -152,13 +160,21 @@ public class GeneratorController {
                     },
                     () -> {
                         try {
+                            log.info("Stream completed, sending final event");
                             emitter.send(SseEmitter.event()
                                     .name("complete")
                                     .data("Code generation completed"));
+                            // Small delay before completing to ensure last event is sent
+                            Thread.sleep(100);
                             emitter.complete();
+                            log.info("SSE emitter completed successfully");
                         } catch (Exception e) {
                             log.error("Error completing stream", e);
-                            emitter.completeWithError(e);
+                            try {
+                                emitter.completeWithError(e);
+                            } catch (Exception ex) {
+                                log.error("Error completing emitter with error", ex);
+                            }
                         }
                     }
                 );

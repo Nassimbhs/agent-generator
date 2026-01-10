@@ -1,15 +1,18 @@
 package com.generator.generator.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.generator.generator.dto.ollama.OllamaRequest;
 import com.generator.generator.dto.ollama.OllamaResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Flux;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 @Service
@@ -27,6 +30,7 @@ public class StreamingCodeGenerationService {
     private Long timeoutSeconds;
 
     private final WebClient.Builder webClientBuilder;
+    private final ObjectMapper objectMapper;
 
     public Flux<String> generateSpringBootCrudStream(String prompt) {
         String systemPrompt = buildSpringBootPrompt(prompt);
@@ -56,61 +60,96 @@ public class StreamingCodeGenerationService {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .retrieve()
-                .bodyToFlux(OllamaResponse.class)
+                .bodyToFlux(DataBuffer.class)
                 .timeout(Duration.ofSeconds(timeoutSeconds))
-                .filter(response -> response.getResponse() != null && !response.getResponse().isEmpty())
+                .map(buffer -> {
+                    String content = buffer.toString(StandardCharsets.UTF_8);
+                    DataBufferUtils.release(buffer);
+                    return content;
+                })
+                .concatMap(content -> {
+                    // Split by newlines and filter empty lines
+                    String[] lines = content.split("\\r?\\n");
+                    return Flux.fromArray(lines)
+                            .filter(line -> !line.trim().isEmpty());
+                })
+                .map(this::parseOllamaResponse)
+                .filter(response -> response != null)
+                .filter(response -> {
+                    // Skip if response contains refusal messages
+                    String responseText = response.getResponse();
+                    if (responseText != null) {
+                        String lower = responseText.toLowerCase();
+                        if (lower.contains("i'm sorry") || lower.contains("i can't") || 
+                            lower.contains("cannot") || lower.contains("unable to") ||
+                            lower.contains("not able")) {
+                            log.warn("LLM returned refusal, skipping: {}", responseText);
+                            return false;
+                        }
+                    }
+                    return responseText != null && !responseText.isEmpty();
+                })
+                .takeUntil(response -> Boolean.TRUE.equals(response.getDone()))
                 .map(OllamaResponse::getResponse)
-                .doOnError(error -> log.error("Error in streaming Ollama call: {}", error.getMessage()))
-                .doOnComplete(() -> log.info("Streaming completed"));
+                .doOnNext(chunk -> log.debug("Received chunk: {}", chunk.substring(0, Math.min(50, chunk.length()))))
+                .doOnError(error -> log.error("Error in streaming Ollama call: {}", error.getMessage(), error))
+                .doOnComplete(() -> log.info("Streaming completed successfully"))
+                .onErrorResume(error -> {
+                    log.error("Streaming error occurred", error);
+                    return Flux.just("// Error generating code: " + error.getMessage() + "\n");
+                });
+    }
+
+    private OllamaResponse parseOllamaResponse(String jsonLine) {
+        try {
+            String trimmed = jsonLine.trim();
+            if (trimmed.isEmpty()) {
+                return null;
+            }
+            return objectMapper.readValue(trimmed, OllamaResponse.class);
+        } catch (Exception e) {
+            log.debug("Failed to parse Ollama response line (might be partial): {}", jsonLine.substring(0, Math.min(100, jsonLine.length())), e);
+            return null;
+        }
     }
 
     private String buildSpringBootPrompt(String userPrompt) {
         return """
-            You are an expert Spring Boot developer. Generate complete CRUD REST API code based on the following requirements.
+            Generate Spring Boot CRUD code. Return ONLY Java code, no explanations.
             
-            Requirements:
-            %s
+            Requirements: %s
             
-            Generate the following Spring Boot components:
-            1. Entity class with JPA annotations (@Entity, @Table, @Id, @GeneratedValue, etc.)
-            2. Repository interface extending JpaRepository
-            3. Service interface (IService) with CRUD methods
-            4. Service implementation with all CRUD operations
-            5. Controller with REST endpoints (@RestController, @RequestMapping, @GetMapping, @PostMapping, @PutMapping, @DeleteMapping)
+            Create:
+            1. Entity class with JPA annotations
+            2. Repository interface extending JpaRepository<Entity, Long>
+            3. Service interface with CRUD methods
+            4. Service implementation with all CRUD operations  
+            5. REST Controller with @GetMapping, @PostMapping, @PutMapping, @DeleteMapping
             6. DTO classes for request and response
-            7. Use Lombok annotations (@Data, @Builder, @NoArgsConstructor, @AllArgsConstructor)
-            8. Include proper validation annotations (@NotNull, @NotBlank, @Size, etc.)
-            9. Add Swagger/OpenAPI annotations (@Operation, @ApiResponse, etc.)
-            10. Include proper error handling
+            7. Use Lombok: @Data, @Builder, @NoArgsConstructor, @AllArgsConstructor
+            8. Add validation: @NotNull, @NotBlank, @Size
+            9. Add Swagger: @Operation, @ApiResponse
+            10. Include error handling
             
-            Return ONLY the Java code, no explanations. Format the code properly with proper indentation.
-            Use Spring Boot 4.0.1, Java 17, and PostgreSQL.
-            
-            Generate complete, production-ready code.
+            Use Spring Boot 4.0.1, Java 17, PostgreSQL. Return complete Java code only.
             """.formatted(userPrompt);
     }
 
     private String buildAngularPrompt(String userPrompt) {
         return """
-            You are an expert Angular developer. Generate TypeScript interface/model files based on the following requirements.
+            Generate Angular TypeScript interfaces. Return ONLY TypeScript code, no explanations.
             
-            Requirements:
-            %s
+            Requirements: %s
             
-            Generate the following Angular TypeScript components:
-            1. Model/Interface files for each entity
-            2. Use proper TypeScript types (string, number, boolean, Date, etc.)
-            3. Include optional properties with '?' where appropriate
-            4. Add proper comments/documentation
-            5. Export interfaces properly
-            6. Use naming conventions: PascalCase for interfaces, camelCase for properties
-            7. Include all fields from the backend entity
-            8. Add proper types for relationships (arrays, nested objects)
+            Create TypeScript interfaces with:
+            1. Proper types: string, number, boolean, Date
+            2. Optional properties with '?'
+            3. Export interfaces
+            4. PascalCase for interfaces, camelCase for properties
+            5. All fields from backend entity
+            6. Types for relationships (arrays, nested objects)
             
-            Return ONLY the TypeScript code, no explanations. Format the code properly with proper indentation.
-            Use Angular 17+ and TypeScript 5+.
-            
-            Generate complete, production-ready TypeScript interfaces/models.
+            Use Angular 17+, TypeScript 5+. Return complete TypeScript code only.
             """.formatted(userPrompt);
     }
 }

@@ -17,8 +17,5 @@ public class OllamaRequest {
     @JsonProperty("stream")
     @Builder.Default
     private Boolean stream = false;
-    
-    @Builder.Default
-    private String format = "json";
 }
 

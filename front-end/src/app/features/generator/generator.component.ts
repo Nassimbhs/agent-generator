@@ -45,8 +45,7 @@ import { environment } from '../../../environments/environment';
               placeholder="Example: Create a User entity with fields: id (Long), username (String), email (String), firstName (String), lastName (String), createdAt (LocalDateTime). Include full CRUD operations with Spring Boot and Angular TypeScript interfaces."
               rows="8"
               class="w-full"
-              [class.ng-invalid]="isFieldInvalid('prompt')"
-              [disabled]="streaming">
+              [class.ng-invalid]="isFieldInvalid('prompt')">
             </textarea>
             @if (isFieldInvalid('prompt')) {
               <small class="p-error">Prompt is required</small>
@@ -213,8 +212,12 @@ export class GeneratorComponent implements OnDestroy {
     private messageService: MessageService
   ) {
     this.generatorForm = this.fb.group({
-      prompt: ['', Validators.required]
+      prompt: [{ value: '', disabled: false }, Validators.required]
     });
+  }
+
+  get promptControl() {
+    return this.generatorForm.get('prompt');
   }
 
   ngOnDestroy(): void {
@@ -244,9 +247,10 @@ export class GeneratorComponent implements OnDestroy {
 
     this.streamingBackend = true;
     this.backendCode = '';
+    this.promptControl?.disable();
     this.startProgressTimer();
 
-    const prompt = this.generatorForm.get('prompt')?.value;
+    const prompt = this.promptControl?.value;
     this.startBackendStreaming(prompt);
   }
 
@@ -255,9 +259,10 @@ export class GeneratorComponent implements OnDestroy {
 
     this.streamingFrontend = true;
     this.frontendCode = '';
+    this.promptControl?.disable();
     this.startProgressTimer();
 
-    const prompt = this.generatorForm.get('prompt')?.value;
+    const prompt = this.promptControl?.value;
     this.startFrontendStreaming(prompt);
   }
 
@@ -293,6 +298,7 @@ export class GeneratorComponent implements OnDestroy {
     this.eventSource.addEventListener('complete', () => {
       this.eventSource?.close();
       this.streamingBackend = false;
+      this.promptControl?.enable();
       this.stopProgressTimer();
       this.messageService.add({ 
         severity: 'success', 
@@ -319,6 +325,7 @@ export class GeneratorComponent implements OnDestroy {
     this.eventSource.onerror = () => {
       this.eventSource?.close();
       this.streamingBackend = false;
+      this.promptControl?.enable();
       this.stopProgressTimer();
       this.messageService.add({ 
         severity: 'error', 
@@ -342,6 +349,7 @@ export class GeneratorComponent implements OnDestroy {
     frontendEventSource.addEventListener('complete', () => {
       frontendEventSource.close();
       this.streamingFrontend = false;
+      this.promptControl?.enable();
       this.stopProgressTimer();
       this.messageService.add({ 
         severity: 'success', 
@@ -368,6 +376,7 @@ export class GeneratorComponent implements OnDestroy {
     frontendEventSource.onerror = () => {
       frontendEventSource.close();
       this.streamingFrontend = false;
+      this.promptControl?.enable();
       this.stopProgressTimer();
       this.messageService.add({ 
         severity: 'error', 
