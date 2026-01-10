@@ -24,7 +24,21 @@ export class ProjectStructureService {
     
     console.log('Sending download request with', structure.files.length, 'files');
     
-    return this.http.post(`${this.apiUrl}/download`, structure, {
+    // Only send the files array to avoid circular reference issues
+    // The tree structure has circular references (children -> parent -> children)
+    const payload = {
+      files: structure.files.map(file => ({
+        path: file.path,
+        name: file.name,
+        content: file.content,
+        language: file.language,
+        type: file.type
+      }))
+    };
+    
+    console.log('Serialized payload:', payload);
+    
+    return this.http.post(`${this.apiUrl}/download`, payload, {
       responseType: 'blob',
       headers: {
         'Content-Type': 'application/json'

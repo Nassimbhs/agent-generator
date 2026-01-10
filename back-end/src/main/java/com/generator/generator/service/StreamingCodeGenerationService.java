@@ -62,98 +62,65 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                 .baseUrl(ollamaApiUrl)
                 .build();
 
+        // Increase timeout to 15 minutes for large code generation
+        int extendedTimeout = Math.max(timeoutSeconds, 900); // 15 minutes minimum
+        
+        log.info("Starting code generation stream with {} second timeout", extendedTimeout);
+
         return webClient.post()
                 .uri("/api/generate")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .retrieve()
                 .bodyToFlux(DataBuffer.class)
-                .timeout(Duration.ofSeconds(timeoutSeconds))
+                .timeout(Duration.ofSeconds(extendedTimeout))
                 .map(buffer -> {
                     String content = buffer.toString(StandardCharsets.UTF_8);
                     DataBufferUtils.release(buffer);
                     return content;
                 })
                 .concatMap(content -> {
-                    // Split by newlines and filter empty lines
+                    // Split by newlines and filter empty lines more efficiently
                     String[] lines = content.split("\\r?\\n");
                     return Flux.fromArray(lines)
                             .filter(line -> line != null && !line.trim().isEmpty());
                 })
-                .doOnNext(rawContent -> log.debug("Raw Ollama response chunk: {}", rawContent.substring(0, Math.min(100, rawContent.length()))))
                 .map(this::parseOllamaResponse)
-                .doOnNext(response -> {
-                    if (response != null) {
-                        log.debug("Parsed response - done: {}, content length: {}", 
-                            response.getDone(), 
-                            response.getResponse() != null ? response.getResponse().length() : 0);
-                    } else {
-                        log.warn("Parsed response is null");
-                    }
-                })
                 .filter(response -> response != null) // Filter nulls first
-                .doOnNext(response -> {
-                    Boolean done = response.getDone();
-                    String resp = response.getResponse();
-                    log.info("Processing response - done: {}, has content: {}, content length: {}", 
-                        done, resp != null && !resp.isEmpty(), resp != null ? resp.length() : 0);
-                })
-                // CRITICAL: takeUntil must see the done marker BEFORE we filter it out
-                // takeUntil INCLUDES the matching element, then stops
-                .takeUntil(response -> {
-                    Boolean done = response.getDone();
-                    if (Boolean.TRUE.equals(done)) {
-                        log.info("takeUntil: Received done marker - will terminate stream after this response");
-                    }
-                    return Boolean.TRUE.equals(done);
-                })
-                // Now filter out done markers and invalid responses
+                .takeUntil(response -> Boolean.TRUE.equals(response.getDone()))
+                // Filter out done markers and invalid responses AFTER takeUntil sees them
                 .filter(response -> {
                     Boolean done = response.getDone();
                     if (Boolean.TRUE.equals(done)) {
-                        log.info("Filtering out done marker (stream will complete after this)");
                         return false; // Don't emit done markers as content
                     }
                     
                     String responseText = response.getResponse();
                     if (responseText == null || responseText.trim().isEmpty()) {
-                        log.debug("Empty response chunk, skipping");
                         return false;
                     }
                     
-                    // Skip if response contains refusal messages
+                    // Skip if response contains refusal messages (quick check)
                     String lower = responseText.toLowerCase();
                     if (lower.contains("i'm sorry") || lower.contains("i can't") || 
                         lower.contains("cannot") || lower.contains("unable to") ||
                         lower.contains("not able") || lower.contains("i apologize")) {
-                        log.warn("LLM returned refusal message: {}", 
-                            responseText.substring(0, Math.min(200, responseText.length())));
+                        log.warn("LLM refusal detected, skipping chunk");
                         return false;
                     }
                     
-                    log.info("Accepting response chunk: {} chars", responseText.length());
                     return true;
                 })
                 .map(response -> {
-                    if (response == null) {
-                        log.error("Unexpected null response in map");
-                        return "";
-                    }
                     String resp = response.getResponse();
-                    if (resp == null || resp.isEmpty()) {
-                        log.warn("Empty response in map");
-                        return "";
-                    }
-                    log.info("Mapping to text chunk: {} chars", resp.length());
-                    return resp;
+                    return resp != null ? resp : "";
                 })
-                .filter(text -> text != null && !text.trim().isEmpty())
-                .doOnNext(chunk -> log.info("Final chunk emitted: {} chars - {}", chunk.length(), 
-                    chunk.substring(0, Math.min(100, chunk.length()))))
-                .doOnComplete(() -> log.info("Flux stream completed normally - all chunks processed"))
-                .doOnError(error -> log.error("Flux stream error: {}", error.getMessage(), error))
+                .filter(text -> !text.trim().isEmpty())
+                .doOnNext(chunk -> log.debug("Emitting chunk: {} chars", chunk.length()))
+                .doOnComplete(() -> log.info("Stream completed successfully"))
+                .doOnError(error -> log.error("Stream error: {}", error.getMessage(), error))
                 .onErrorResume(error -> {
-                    log.error("Streaming error occurred, returning error message: {}", error.getMessage(), error);
+                    log.error("Streaming error: {}", error.getMessage());
                     return Flux.just("// Error generating code: " + error.getMessage() + "\n");
                 });
     }

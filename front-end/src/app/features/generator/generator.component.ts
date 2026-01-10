@@ -148,35 +148,35 @@ import { AuthService } from '../../core/services/auth.service';
             <p-tabView>
               @if (streamingBackend || backendCode) {
                 <p-tabPanel header="Backend Code (Live)">
-                  <div class="grid">
+                  <div class="grid p-0 m-0">
                     <!-- File Tree -->
-                    <div class="col-12 lg:col-4 md:col-3 border-right-1 surface-border pr-3 tree-panel">
-                      <div class="flex justify-content-between align-items-center mb-2 sticky top-0 bg-white z-1 pb-2">
-                        <h4 class="m-0 text-sm font-semibold">Project Structure</h4>
+                    <div class="col-12 lg:col-3 border-right-1 surface-border flex flex-column overflow-hidden max-h-30rem">
+                      <div class="flex justify-content-between align-items-center p-2 sticky top-0 bg-white z-1 border-bottom-1 surface-border">
+                        <h4 class="m-0 text-sm font-semibold text-overflow-ellipsis overflow-hidden white-space-nowrap flex-1">Project Structure</h4>
                         @if (backendProjectStructure) {
                           <p-button 
-                            label="ZIP" 
                             icon="pi pi-download"
                             size="small"
                             [text]="true"
                             pTooltip="Download as ZIP"
                             tooltipPosition="left"
+                            class="ml-2 flex-shrink-0"
                             (onClick)="downloadProjectZip(backendProjectStructure)">
                           </p-button>
                         }
                       </div>
                       @if (backendTreeNodes && backendTreeNodes.length > 0) {
-                        <div class="tree-container">
+                        <div class="flex-1 overflow-y-auto overflow-x-hidden p-2 tree-container">
                           <p-tree 
                             [value]="backendTreeNodes" 
                             selectionMode="single"
                             [(selection)]="selectedBackendFile"
                             (onNodeSelect)="onBackendFileSelect($event)"
-                            styleClass="w-full text-sm project-tree">
+                            styleClass="w-full text-sm project-tree overflow-hidden">
                             <ng-template let-node pTemplate="default">
-                              <span class="flex align-items-center gap-2 tree-node">
-                                <i [class]="node.icon" class="tree-icon"></i>
-                                <span class="tree-label">{{ node.label }}</span>
+                              <span class="flex align-items-center gap-1 w-full">
+                                <i [class]="node.icon" class="flex-shrink-0"></i>
+                                <span class="text-overflow-ellipsis overflow-hidden white-space-nowrap flex-1">{{ node.label }}</span>
                               </span>
                             </ng-template>
                           </p-tree>
@@ -187,13 +187,13 @@ import { AuthService } from '../../core/services/auth.service';
                     </div>
                     
                     <!-- Code Display -->
-                    <div class="col-12 lg:col-8 md:col-9">
-                      <div class="relative code-display-container">
-                        <div class="flex flex-column md:flex-row justify-content-between align-items-center mb-2 sticky top-0 bg-white z-1 pb-2 gap-2">
+                    <div class="col-12 lg:col-9 flex flex-column overflow-hidden max-h-30rem">
+                      <div class="flex flex-column flex-1">
+                        <div class="flex flex-column md:flex-row justify-content-between align-items-center p-2 sticky top-0 bg-white z-1 border-bottom-1 surface-border gap-2">
                           <div class="flex align-items-center gap-2 flex-wrap">
                             @if (streamingBackend) {
                               <span class="text-xs bg-primary text-white border-round px-2 py-1">
-                                <i class="pi pi-circle-fill mr-1" style="animation: blink 1s infinite;"></i>
+                                <i class="pi pi-circle-fill mr-1 animate-blink"></i>
                                 LIVE
                               </span>
                             }
@@ -212,9 +212,8 @@ import { AuthService } from '../../core/services/auth.service';
                             (onClick)="copyToClipboard(selectedBackendFileContent || backendCode)">
                           </p-button>
                         </div>
-                        <div class="code-viewer">
-                          <pre class="p-4 m-0 bg-gray-900 text-green-400 border-round text-sm line-height-3 font-mono code-content" 
-                               style="white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; min-height: 200px;"
+                        <div class="flex-1 overflow-auto code-viewer">
+                          <pre class="p-4 m-0 bg-gray-900 text-green-400 border-round text-sm line-height-3 font-mono code-pre" 
                                id="backend-code">{{ selectedBackendFileContent || backendCode }}@if (streamingBackend) {<span class="text-white animate-blink">|</span>}</pre>
                         </div>
                       </div>
@@ -227,33 +226,33 @@ import { AuthService } from '../../core/services/auth.service';
                 <p-tabPanel header="Frontend Code (Live)">
                   <div class="grid">
                     <!-- File Tree -->
-                    <div class="col-12 lg:col-4 md:col-3 border-right-1 surface-border pr-3 tree-panel">
-                      <div class="flex justify-content-between align-items-center mb-2 sticky top-0 bg-white z-1 pb-2">
-                        <h4 class="m-0 text-sm font-semibold">Project Structure</h4>
+                    <div class="col-12 lg:col-3 border-right-1 surface-border flex flex-column overflow-hidden max-h-30rem">
+                      <div class="flex justify-content-between align-items-center p-2 sticky top-0 bg-white z-1 border-bottom-1 surface-border">
+                        <h4 class="m-0 text-sm font-semibold text-overflow-ellipsis overflow-hidden white-space-nowrap flex-1">Project Structure</h4>
                         @if (frontendProjectStructure) {
                           <p-button 
-                            label="ZIP" 
                             icon="pi pi-download"
                             size="small"
                             [text]="true"
                             pTooltip="Download as ZIP"
                             tooltipPosition="left"
+                            class="ml-2 flex-shrink-0"
                             (onClick)="downloadProjectZip(frontendProjectStructure)">
                           </p-button>
                         }
                       </div>
                       @if (frontendTreeNodes && frontendTreeNodes.length > 0) {
-                        <div class="tree-container">
+                        <div class="flex-1 overflow-y-auto overflow-x-hidden p-2 tree-container">
                           <p-tree 
                             [value]="frontendTreeNodes" 
                             selectionMode="single"
                             [(selection)]="selectedFrontendFile"
                             (onNodeSelect)="onFrontendFileSelect($event)"
-                            styleClass="w-full text-sm project-tree">
+                            styleClass="w-full text-sm project-tree overflow-hidden">
                             <ng-template let-node pTemplate="default">
-                              <span class="flex align-items-center gap-2 tree-node">
-                                <i [class]="node.icon" class="tree-icon"></i>
-                                <span class="tree-label">{{ node.label }}</span>
+                              <span class="flex align-items-center gap-1 w-full">
+                                <i [class]="node.icon" class="flex-shrink-0"></i>
+                                <span class="text-overflow-ellipsis overflow-hidden white-space-nowrap flex-1">{{ node.label }}</span>
                               </span>
                             </ng-template>
                           </p-tree>
@@ -264,13 +263,13 @@ import { AuthService } from '../../core/services/auth.service';
                     </div>
                     
                     <!-- Code Display -->
-                    <div class="col-12 lg:col-8 md:col-9">
-                      <div class="relative code-display-container">
-                        <div class="flex flex-column md:flex-row justify-content-between align-items-center mb-2 sticky top-0 bg-white z-1 pb-2 gap-2">
+                    <div class="col-12 lg:col-9 flex flex-column overflow-hidden max-h-30rem">
+                      <div class="flex flex-column flex-1">
+                        <div class="flex flex-column md:flex-row justify-content-between align-items-center p-2 sticky top-0 bg-white z-1 border-bottom-1 surface-border gap-2">
                           <div class="flex align-items-center gap-2 flex-wrap">
                             @if (streamingFrontend) {
                               <span class="text-xs bg-primary text-white border-round px-2 py-1">
-                                <i class="pi pi-circle-fill mr-1" style="animation: blink 1s infinite;"></i>
+                                <i class="pi pi-circle-fill mr-1 animate-blink"></i>
                                 LIVE
                               </span>
                             }
@@ -289,9 +288,8 @@ import { AuthService } from '../../core/services/auth.service';
                             (onClick)="copyToClipboard(selectedFrontendFileContent || frontendCode)">
                           </p-button>
                         </div>
-                        <div class="code-viewer">
-                          <pre class="p-4 m-0 bg-gray-900 text-blue-400 border-round text-sm line-height-3 font-mono code-content" 
-                               style="white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace; min-height: 200px;"
+                        <div class="flex-1 overflow-auto code-viewer">
+                          <pre class="p-4 m-0 bg-gray-900 text-blue-400 border-round text-sm line-height-3 font-mono code-pre" 
                                id="frontend-code">{{ selectedFrontendFileContent || frontendCode }}@if (streamingFrontend) {<span class="text-white animate-blink">|</span>}</pre>
                         </div>
                       </div>
@@ -308,202 +306,55 @@ import { AuthService } from '../../core/services/auth.service';
     <p-toast></p-toast>
   `,
   styles: [`
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0; }
-    }
-    .animate-blink {
-      animation: blink 1s infinite;
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    .animate-blink { animation: blink 1s infinite; }
+    
+    /* Code pre styling - PrimeFlex doesn't have all pre-wrap utilities */
+    .code-pre { 
+      white-space: pre-wrap; 
+      word-wrap: break-word; 
+      min-height: 12rem;
+      font-family: 'Courier New', monospace;
     }
     
-    /* Responsive Tree Panel */
-    .tree-panel {
-      max-height: 600px;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    
+    /* Custom scrollbars - PrimeFlex doesn't support custom scrollbars */
     .tree-container {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: hidden;
-      max-height: calc(600px - 60px);
       scrollbar-width: thin;
       scrollbar-color: #cbd5e0 #f7fafc;
     }
-    
-    .tree-container::-webkit-scrollbar {
-      width: 6px;
-    }
-    
-    .tree-container::-webkit-scrollbar-track {
-      background: #f7fafc;
-      border-radius: 3px;
-    }
-    
-    .tree-container::-webkit-scrollbar-thumb {
-      background: #cbd5e0;
-      border-radius: 3px;
-    }
-    
-    .tree-container::-webkit-scrollbar-thumb:hover {
-      background: #a0aec0;
-    }
-    
-    .project-tree ::ng-deep .p-tree {
-      font-size: 0.875rem;
-    }
-    
-    .project-tree ::ng-deep .p-tree .p-treenode {
-      padding: 0.25rem 0;
-    }
-    
-    .project-tree ::ng-deep .p-tree .p-treenode-content {
-      padding: 0.375rem 0.5rem;
-      border-radius: 4px;
-      transition: background-color 0.2s;
-      cursor: pointer;
-    }
-    
-    .project-tree ::ng-deep .p-tree .p-treenode-content:hover {
-      background-color: #f3f4f6;
-    }
-    
-    .project-tree ::ng-deep .p-tree .p-treenode-content.p-highlight {
-      background-color: #dbeafe;
-      color: #1e40af;
-    }
-    
-    .tree-node {
-      width: 100%;
-      overflow: hidden;
-      min-width: 0;
-    }
-    
-    .tree-icon {
-      font-size: 0.875rem;
-      min-width: 1rem;
-      flex-shrink: 0;
-    }
-    
-    .tree-label {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      flex: 1;
-      min-width: 0;
-    }
-    
-    /* Responsive Code Display */
-    .code-display-container {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      max-height: 600px;
-    }
+    .tree-container::-webkit-scrollbar { width: 6px; }
+    .tree-container::-webkit-scrollbar-track { background: #f7fafc; border-radius: 3px; }
+    .tree-container::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 3px; }
+    .tree-container::-webkit-scrollbar-thumb:hover { background: #a0aec0; }
     
     .code-viewer {
-      flex: 1;
-      overflow-y: auto;
-      overflow-x: auto;
-      max-height: calc(600px - 80px);
       scrollbar-width: thin;
       scrollbar-color: #4a5568 #2d3748;
     }
+    .code-viewer::-webkit-scrollbar { width: 8px; height: 8px; }
+    .code-viewer::-webkit-scrollbar-track { background: #2d3748; border-radius: 4px; }
+    .code-viewer::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 4px; }
+    .code-viewer::-webkit-scrollbar-thumb:hover { background: #718096; }
     
-    .code-viewer::-webkit-scrollbar {
-      width: 8px;
-      height: 8px;
+    /* PrimeNG Tree deep styling - minimal necessary overrides */
+    .project-tree ::ng-deep .p-tree { width: 100%; overflow: hidden; }
+    .project-tree ::ng-deep .p-tree-container { width: 100%; overflow-x: hidden; }
+    .project-tree ::ng-deep .p-treenode-content { width: 100%; overflow: hidden; }
+    .project-tree ::ng-deep .p-treenode-content:hover { background-color: #f3f4f6; }
+    .project-tree ::ng-deep .p-treenode-content.p-highlight { background-color: #dbeafe; color: #1e40af; }
+    .project-tree ::ng-deep .p-treenode-children { width: 100%; overflow-x: hidden; }
+    
+    /* Responsive max-height adjustments - using rem for consistency */
+    @media (max-width: 991px) {
+      .max-h-30rem { max-height: 25rem !important; }
     }
-    
-    .code-viewer::-webkit-scrollbar-track {
-      background: #2d3748;
-      border-radius: 4px;
+    @media (max-width: 767px) {
+      .max-h-30rem { max-height: 18rem !important; }
+      .code-pre { font-size: 0.75rem; padding: 0.75rem; }
     }
-    
-    .code-viewer::-webkit-scrollbar-thumb {
-      background: #4a5568;
-      border-radius: 4px;
-    }
-    
-    .code-viewer::-webkit-scrollbar-thumb:hover {
-      background: #718096;
-    }
-    
-    .code-content {
-      margin: 0;
-      padding: 1rem;
-    }
-    
-    /* Responsive Breakpoints */
-    @media (max-width: 1024px) {
-      .tree-panel {
-        max-height: 400px;
-      }
-      
-      .tree-container {
-        max-height: calc(400px - 60px);
-      }
-      
-      .code-display-container {
-        max-height: 400px;
-      }
-      
-      .code-viewer {
-        max-height: calc(400px - 80px);
-      }
-    }
-    
-    @media (max-width: 768px) {
-      .tree-panel {
-        max-height: 300px;
-        border-right: none;
-        border-bottom: 1px solid #e5e7eb;
-        margin-bottom: 1rem;
-        padding-bottom: 1rem;
-      }
-      
-      .tree-container {
-        max-height: calc(300px - 60px);
-      }
-      
-      .code-display-container .sticky {
-        position: relative;
-      }
-      
-      .code-display-container {
-        max-height: 400px;
-      }
-      
-      .code-viewer {
-        max-height: calc(400px - 80px);
-      }
-      
-      .code-content {
-        font-size: 0.75rem;
-        padding: 0.75rem;
-      }
-      
-      .tree-label {
-        font-size: 0.8125rem;
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .tree-panel {
-        max-height: 250px;
-      }
-      
-      .tree-container {
-        max-height: calc(250px - 60px);
-      }
-      
-      .code-content {
-        font-size: 0.7rem;
-        padding: 0.5rem;
-        line-height: 1.5;
-      }
+    @media (max-width: 575px) {
+      .max-h-30rem { max-height: 15rem !important; }
+      .code-pre { font-size: 0.7rem; padding: 0.5rem; }
     }
   `]
 })
@@ -829,10 +680,11 @@ export class GeneratorComponent implements OnDestroy {
   }
 
   private startProgressTimer(): void {
-    // Estimate time based on prompt length (rough estimate: 30 seconds to 5 minutes)
+    // Estimate time based on prompt length (rough estimate: 1 minute to 10 minutes)
     const promptLength = this.generatorForm.get('prompt')?.value?.length || 0;
-    // Base time: 30 seconds, add 0.5 seconds per character (max 5 minutes)
-    this.estimatedTime = Math.max(30, Math.min(300, 30 + Math.floor(promptLength * 0.5)));
+    // Base time: 60 seconds, add 0.8 seconds per character (max 10 minutes for large projects)
+    // Code generation can take longer for complex applications
+    this.estimatedTime = Math.max(60, Math.min(600, 60 + Math.floor(promptLength * 0.8)));
     this.elapsedTime = 0;
     this.progressPercentage = 0;
 
