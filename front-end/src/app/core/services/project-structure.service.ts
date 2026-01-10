@@ -66,28 +66,41 @@ export class ProjectStructureService {
     // Parse FILE: patterns from generated code
     // Pattern matches: FILE: path/to/file.ext\n```language\ncontent\n```
     // or FILE: path/to/file.ext\ncontent (without code blocks)
-    // More flexible pattern to handle incomplete blocks
-    const filePattern = /FILE:\s*([^\n\r]+?)(?:\s*\r?\n)?(?:```(\w+)?\s*\r?\n)?([\s\S]*?)(?:```|(?=FILE:|$))/gi;
+    // Improved pattern to correctly capture file paths
+    // FILE: followed by path (non-greedy until newline), then optional code block
+    const filePattern = /FILE:\s*([^\n\r]+?)(?:\s*\r?\n)(?:```(\w+)?\s*\r?\n)?([\s\S]*?)(?:```\s*(?:\r?\n|$)|(?=\s*FILE:)|$)/gi;
     const files: any[] = [];
     let match;
     let lastIndex = 0;
 
     while ((match = filePattern.exec(code)) !== null) {
-      const path = match[1]?.trim();
-      const language = match[2]?.trim() || this.detectLanguage(path);
-      // Content is in group 3 (the entire content after FILE: and optional language)
-      const content = (match[3] || '').trim();
-      const name = path ? path.split('/').pop() || path.split('\\').pop() || path : '';
+      // Group 1: File path (everything after FILE: until newline)
+      let path = match[1]?.trim();
+      // Group 2: Language (optional, from ```language)
+      const language = match[2]?.trim() || this.detectLanguage(path || '');
+      // Group 3: Content (everything between code blocks or until next FILE:)
+      let content = (match[3] || '').trim();
+      
+      // Clean up path - remove any trailing whitespace or invalid characters
+      if (path) {
+        path = path.replace(/[^\w\s\/\\\.\-_]/g, '').trim();
+      }
+      
+      // Extract filename from path
+      const name = path ? (path.split('/').pop() || path.split('\\').pop() || path) : 'unknown';
 
-      if (path && content) {
+      // Only add if we have a valid path and some content
+      if (path && path.length > 0 && content.length > 0) {
         files.push({
           path: path.replace(/\\/g, '/'), // Normalize path separators
-          name,
+          name: name || path, // Use path as fallback if name extraction fails
           content,
           language,
           type: 'file'
         });
-        console.log('Parsed file:', path, 'Language:', language, 'Content length:', content.length);
+        console.log('Parsed file:', path, 'Name:', name, 'Language:', language, 'Content length:', content.length);
+      } else {
+        console.warn('Skipping invalid file entry. Path:', path, 'Content length:', content.length);
       }
       lastIndex = match.index + match[0].length;
     }
@@ -127,11 +140,24 @@ export class ProjectStructureService {
     files.sort((a, b) => a.path.localeCompare(b.path));
 
     for (const file of files) {
-      const parts = file.path.split('/');
+      // Ensure we have a valid path
+      if (!file.path || file.path.trim().length === 0) {
+        console.warn('Skipping file with empty path:', file);
+        continue;
+      }
+      
+      const parts = file.path.split('/').filter(p => p && p.trim().length > 0);
+      
+      // If no parts, skip this file
+      if (parts.length === 0) {
+        console.warn('Skipping file with no valid path parts:', file);
+        continue;
+      }
+      
       let currentPath = '';
       let parent = root;
 
-      // Create folder nodes
+      // Create folder nodes (all parts except the last one)
       for (let i = 0; i < parts.length - 1; i++) {
         if (i > 0) currentPath += '/';
         currentPath += parts[i];
@@ -139,7 +165,7 @@ export class ProjectStructureService {
 
         if (!folderMap.has(folderPath)) {
           const folder: any = {
-            label: parts[i],
+            label: parts[i], // Use the folder name, not just "s"
             type: 'folder',
             icon: 'pi pi-folder',
             expanded: true,
@@ -152,10 +178,10 @@ export class ProjectStructureService {
         parent = folderMap.get(folderPath)!;
       }
 
-      // Create file node
-      const fileName = parts[parts.length - 1];
+      // Create file node - use the actual file name with extension
+      const fileName = parts[parts.length - 1] || file.name || 'unknown';
       const fileNode: any = {
-        label: fileName,
+        label: fileName, // Full filename with extension
         data: file.path,
         type: 'file',
         icon: this.getFileIcon(file.language),
@@ -167,6 +193,8 @@ export class ProjectStructureService {
         key: file.path
       };
       parent.children.push(fileNode);
+      
+      console.log('Added file node:', fileName, 'to path:', file.path);
     }
 
     return {

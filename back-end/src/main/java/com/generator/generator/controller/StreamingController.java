@@ -171,13 +171,24 @@ public class StreamingController {
                                 return;
                             }
                             
-                            // Send completion event
-                            emitter.send(SseEmitter.event()
-                                    .name("complete")
-                                    .data("Code generation completed. Total: " + finalCode.length() + " characters"));
-                            Thread.sleep(200); // Give time for complete event to be sent
-                            emitter.complete();
-                            log.info("SSE emitter completed successfully for project: {}", id);
+                            // Send completion event and ensure it's flushed before closing
+                            try {
+                                emitter.send(SseEmitter.event()
+                                        .name("complete")
+                                        .data("Code generation completed. Total: " + finalCode.length() + " characters"));
+                                // Give more time for complete event to be sent and flushed
+                                Thread.sleep(500);
+                            } catch (Exception sendEx) {
+                                log.warn("Error sending complete event: {}", sendEx.getMessage());
+                            }
+                            
+                            // Complete the emitter
+                            try {
+                                emitter.complete();
+                                log.info("SSE emitter completed successfully for project: {}", id);
+                            } catch (Exception completeEx) {
+                                log.warn("Error completing emitter (may already be closed): {}", completeEx.getMessage());
+                            }
                         } catch (Exception e) {
                             log.error("Error completing stream: {}", e.getMessage(), e);
                             try {
@@ -341,13 +352,24 @@ public class StreamingController {
                                 return;
                             }
                             
-                            // Send completion event
-                            emitter.send(SseEmitter.event()
-                                    .name("complete")
-                                    .data("Code generation completed. Total: " + finalCode.length() + " characters"));
-                            Thread.sleep(200); // Give time for complete event to be sent
-                            emitter.complete();
-                            log.info("SSE emitter completed successfully for project: {}", id);
+                            // Send completion event and ensure it's flushed before closing
+                            try {
+                                emitter.send(SseEmitter.event()
+                                        .name("complete")
+                                        .data("Code generation completed. Total: " + finalCode.length() + " characters"));
+                                // Give more time for complete event to be sent and flushed
+                                Thread.sleep(500);
+                            } catch (Exception sendEx) {
+                                log.warn("Error sending complete event: {}", sendEx.getMessage());
+                            }
+                            
+                            // Complete the emitter
+                            try {
+                                emitter.complete();
+                                log.info("SSE emitter completed successfully for project: {}", id);
+                            } catch (Exception completeEx) {
+                                log.warn("Error completing emitter (may already be closed): {}", completeEx.getMessage());
+                            }
                         } catch (Exception e) {
                             log.error("Error completing stream: {}", e.getMessage(), e);
                             try {
