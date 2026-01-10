@@ -39,6 +39,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         
+        // For SSE endpoints, we need to validate authentication BEFORE response is committed
+        boolean isSseEndpoint = requestPath.contains("/stream");
+        
         String token = getTokenFromRequest(request);
 
         if (token != null && tokenProvider.validateToken(token)) {
@@ -50,13 +53,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                
+                log.debug("Successfully authenticated user: {} for path: {}", username, requestPath);
             } catch (Exception e) {
                 log.warn("Failed to authenticate user with token: {}", e.getMessage());
                 SecurityContextHolder.clearContext();
+                
+                        // For SSE endpoints, don't fail here - let the controller handle it
+                        // because SSE responses need special handling
+                        // The controller will check authentication before creating emitter
+                        log.debug("Authentication failed for SSE endpoint, will be handled by controller");
             }
         } else if (token != null) {
-            log.warn("Invalid or expired token received");
+            log.warn("Invalid or expired token received for path: {}", requestPath);
             SecurityContextHolder.clearContext();
+            
+            // For SSE endpoints, let Spring Security handle authorization
+            // The controller will validate authentication before creating emitter
+            log.debug("Invalid token for SSE endpoint, will be handled by authorization filter");
+        } else {
+            // No token provided - for SSE endpoints that require auth, fail early
+            if (isSseEndpoint && requestPath.contains("/api/projects/") && requestPath.contains("/generate/")) {
+                log.warn("No token provided for SSE endpoint: {}", requestPath);
+                // Don't fail here - let Spring Security handle it, but log it
+            }
         }
 
         filterChain.doFilter(request, response);

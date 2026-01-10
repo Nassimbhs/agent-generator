@@ -36,7 +36,7 @@ public class StreamingController {
     private final UserRepository userRepository;
 
     @GetMapping(value = "/{id}/generate/backend/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @Operation(summary = "Stream backend code generation", description = "Streams Spring Boot CRUD code generation in real-time")
+    @Operation(summary = "Stream backend code generation", description = "Streams Spring Boot CRUD code generation in real-time. Optionally provide existingProjectPath to enhance with existing project files.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Streaming started"),
         @ApiResponse(responseCode = "404", description = "Project not found")
@@ -44,20 +44,55 @@ public class StreamingController {
     public SseEmitter streamBackendCode(
             @PathVariable Long id,
             @RequestParam(required = false) String token,
+            @RequestParam(required = false, value = "existingProjectPath") String existingProjectPath,
             Authentication authentication) {
         
-        // Authentication is handled by Spring Security filter
-        String username = authentication != null ? authentication.getName() : null;
-        if (username == null) {
-            throw new RuntimeException("User not authenticated");
+        // CRITICAL: Validate authentication BEFORE creating SSE emitter
+        // Once emitter is created, response is committed and Spring Security can't handle errors
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.error("Unauthenticated request to SSE endpoint /api/projects/{}/generate/backend/stream", id);
+            SseEmitter errorEmitter = new SseEmitter(1000L);
+            try {
+                errorEmitter.send(SseEmitter.event()
+                        .name("error")
+                        .data("Unauthenticated: Please provide a valid authentication token"));
+                errorEmitter.completeWithError(new RuntimeException("Authentication required"));
+            } catch (IOException e) {
+                log.error("Error sending authentication error", e);
+            }
+            return errorEmitter;
         }
         
+        String username = authentication.getName();
+        if (username == null || username.isEmpty()) {
+            log.error("Authentication object exists but username is null");
+            SseEmitter errorEmitter = new SseEmitter(1000L);
+            try {
+                errorEmitter.send(SseEmitter.event()
+                        .name("error")
+                        .data("Authentication failed: Invalid user"));
+                errorEmitter.completeWithError(new RuntimeException("Invalid authentication"));
+            } catch (IOException e) {
+                log.error("Error sending authentication error", e);
+            }
+            return errorEmitter;
+        }
+        
+        log.info("Authenticated user: {} requesting backend code generation for project: {}", username, id);
+        
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> {
+                    log.error("User not found: {}", username);
+                    return new RuntimeException("User not found: " + username);
+                });
 
         Project project = projectRepository.findByIdAndUserId(id, user.getId())
-                .orElseThrow(() -> new RuntimeException("Project not found or access denied"));
+                .orElseThrow(() -> {
+                    log.error("Project not found or access denied. Project ID: {}, User ID: {}", id, user.getId());
+                    return new RuntimeException("Project not found or access denied");
+                });
 
+        // Only create SSE emitter after all validations pass
         SseEmitter emitter = new SseEmitter(300000L);
         emitter.onCompletion(() -> log.info("SSE connection completed"));
         emitter.onTimeout(() -> {
@@ -73,50 +108,97 @@ public class StreamingController {
             try {
                 StringBuilder fullCode = new StringBuilder();
                 
-                Flux<String> codeStream = streamingService.generateSpringBootCrudStream(project.getPrompt());
+                // Use hybrid approach: pass existing project path if provided (Option 3)
+                Flux<String> codeStream = streamingService.generateSpringBootCrudStream(
+                        project.getPrompt(), 
+                        existingProjectPath);
                 
                 codeStream.subscribe(
                     chunk -> {
                         try {
-                            fullCode.append(chunk);
-                            emitter.send(SseEmitter.event()
-                                    .name("code-chunk")
-                                    .data(chunk));
+                            if (chunk != null && !chunk.isEmpty()) {
+                                fullCode.append(chunk);
+                                emitter.send(SseEmitter.event()
+                                        .name("code-chunk")
+                                        .data(chunk));
+                            }
                         } catch (IOException e) {
-                            log.error("Error sending chunk", e);
-                            emitter.completeWithError(e);
+                            log.error("Error sending chunk (stream may be closed): {}", e.getMessage());
+                            // Don't try to complete again if stream is already closed
+                            // IOException typically means the connection was closed
+                            log.debug("Stream connection likely closed, stopping chunk sending");
+                        } catch (IllegalStateException e) {
+                            log.debug("Emitter already completed or closed: {}", e.getMessage());
+                        } catch (Exception e) {
+                            log.error("Unexpected error sending chunk: {}", e.getMessage(), e);
                         }
                     },
                     error -> {
-                        log.error("Error in stream", error);
+                        log.error("Error in code generation stream: {}", error.getMessage(), error);
                         try {
+                            // Try to send error event before completing
                             emitter.send(SseEmitter.event()
                                     .name("error")
-                                    .data("Error: " + error.getMessage()));
-                            emitter.completeWithError(error);
-                        } catch (IOException e) {
-                            emitter.completeWithError(e);
+                                    .data("Error generating code: " + error.getMessage()));
+                            Thread.sleep(100); // Give time for error event to be sent
+                        } catch (Exception e) {
+                            log.debug("Could not send error event (stream may be closed): {}", e.getMessage());
+                        } finally {
+                            try {
+                                emitter.completeWithError(error);
+                            } catch (Exception e) {
+                                log.debug("Emitter already closed, ignoring error completion");
+                            }
                         }
                     },
                     () -> {
                         try {
-                            // Save the complete code to database
-                            project.setBackendCode(fullCode.toString());
-                            projectRepository.save(project);
+                            String finalCode = fullCode.toString();
+                            log.info("Stream completed. Total code length: {} chars", finalCode.length());
                             
+                            // Save the complete code to database
+                            if (!finalCode.isEmpty()) {
+                                project.setBackendCode(finalCode);
+                                projectRepository.save(project);
+                                log.info("Saved backend code to database for project: {}", id);
+                            } else {
+                                log.warn("Stream completed but no code was generated!");
+                                emitter.send(SseEmitter.event()
+                                        .name("error")
+                                        .data("No code was generated. Please check your prompt and Ollama connection."));
+                                Thread.sleep(100);
+                                emitter.complete();
+                                return;
+                            }
+                            
+                            // Send completion event
                             emitter.send(SseEmitter.event()
                                     .name("complete")
-                                    .data("Code generation completed"));
+                                    .data("Code generation completed. Total: " + finalCode.length() + " characters"));
+                            Thread.sleep(200); // Give time for complete event to be sent
                             emitter.complete();
+                            log.info("SSE emitter completed successfully for project: {}", id);
                         } catch (Exception e) {
-                            log.error("Error completing stream", e);
-                            emitter.completeWithError(e);
+                            log.error("Error completing stream: {}", e.getMessage(), e);
+                            try {
+                                emitter.completeWithError(e);
+                            } catch (Exception ex) {
+                                log.debug("Emitter already closed, ignoring completion error");
+                            }
                         }
                     }
                 );
             } catch (Exception e) {
-                log.error("Error starting stream", e);
-                emitter.completeWithError(e);
+                log.error("Error starting code generation stream: {}", e.getMessage(), e);
+                try {
+                    emitter.send(SseEmitter.event()
+                            .name("error")
+                            .data("Failed to start code generation: " + e.getMessage()));
+                    Thread.sleep(100);
+                    emitter.completeWithError(e);
+                } catch (Exception ex) {
+                    log.error("Could not send error event: {}", ex.getMessage());
+                }
             }
         });
 
@@ -124,7 +206,7 @@ public class StreamingController {
     }
 
     @GetMapping(value = "/{id}/generate/frontend/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @Operation(summary = "Stream frontend code generation", description = "Streams Angular TypeScript interfaces generation in real-time")
+    @Operation(summary = "Stream frontend code generation", description = "Streams Angular TypeScript interfaces generation in real-time. Optionally provide existingProjectPath to enhance with existing project files.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Streaming started"),
         @ApiResponse(responseCode = "404", description = "Project not found")
@@ -132,8 +214,55 @@ public class StreamingController {
     public SseEmitter streamFrontendCode(
             @PathVariable Long id,
             @RequestParam(required = false) String token,
+            @RequestParam(required = false, value = "existingProjectPath") String existingProjectPath,
             Authentication authentication) {
         
+        // CRITICAL: Validate authentication BEFORE creating SSE emitter
+        // Once emitter is created, response is committed and Spring Security can't handle errors
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.error("Unauthenticated request to SSE endpoint /api/projects/{}/generate/frontend/stream", id);
+            SseEmitter errorEmitter = new SseEmitter(1000L);
+            try {
+                errorEmitter.send(SseEmitter.event()
+                        .name("error")
+                        .data("Unauthenticated: Please provide a valid authentication token"));
+                errorEmitter.completeWithError(new RuntimeException("Authentication required"));
+            } catch (IOException e) {
+                log.error("Error sending authentication error", e);
+            }
+            return errorEmitter;
+        }
+        
+        String username = authentication.getName();
+        if (username == null || username.isEmpty()) {
+            log.error("Authentication object exists but username is null");
+            SseEmitter errorEmitter = new SseEmitter(1000L);
+            try {
+                errorEmitter.send(SseEmitter.event()
+                        .name("error")
+                        .data("Authentication failed: Invalid user"));
+                errorEmitter.completeWithError(new RuntimeException("Invalid authentication"));
+            } catch (IOException e) {
+                log.error("Error sending authentication error", e);
+            }
+            return errorEmitter;
+        }
+        
+        log.info("Authenticated user: {} requesting frontend code generation for project: {}", username, id);
+        
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> {
+                    log.error("User not found: {}", username);
+                    return new RuntimeException("User not found: " + username);
+                });
+
+        Project project = projectRepository.findByIdAndUserId(id, user.getId())
+                .orElseThrow(() -> {
+                    log.error("Project not found or access denied. Project ID: {}, User ID: {}", id, user.getId());
+                    return new RuntimeException("Project not found or access denied");
+                });
+        
+        // Only create SSE emitter after all validations pass
         SseEmitter emitter = new SseEmitter(300000L);
         emitter.onCompletion(() -> log.info("SSE connection completed"));
         emitter.onTimeout(() -> {
@@ -145,66 +274,101 @@ public class StreamingController {
             emitter.completeWithError(ex);
         });
         
-        // Authentication is handled by Spring Security filter
-        String username = authentication != null ? authentication.getName() : null;
-        if (username == null) {
-            throw new RuntimeException("User not authenticated");
-        }
-        
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        Project project = projectRepository.findByIdAndUserId(id, user.getId())
-                .orElseThrow(() -> new RuntimeException("Project not found or access denied"));
-        
         CompletableFuture.runAsync(() -> {
             try {
                 StringBuilder fullCode = new StringBuilder();
                 
-                Flux<String> codeStream = streamingService.generateAngularInterfacesStream(project.getPrompt());
+                // Use hybrid approach: pass existing project path if provided (Option 3)
+                Flux<String> codeStream = streamingService.generateAngularInterfacesStream(
+                        project.getPrompt(), 
+                        existingProjectPath);
                 
                 codeStream.subscribe(
                     chunk -> {
                         try {
-                            fullCode.append(chunk);
-                            emitter.send(SseEmitter.event()
-                                    .name("code-chunk")
-                                    .data(chunk));
+                            if (chunk != null && !chunk.isEmpty()) {
+                                fullCode.append(chunk);
+                                emitter.send(SseEmitter.event()
+                                        .name("code-chunk")
+                                        .data(chunk));
+                            }
                         } catch (IOException e) {
-                            log.error("Error sending chunk", e);
-                            emitter.completeWithError(e);
+                            log.error("Error sending chunk (stream may be closed): {}", e.getMessage());
+                            // Don't try to complete again if stream is already closed
+                            // IOException typically means the connection was closed
+                            log.debug("Stream connection likely closed, stopping chunk sending");
+                        } catch (IllegalStateException e) {
+                            log.debug("Emitter already completed or closed: {}", e.getMessage());
+                        } catch (Exception e) {
+                            log.error("Unexpected error sending chunk: {}", e.getMessage(), e);
                         }
                     },
                     error -> {
-                        log.error("Error in stream", error);
+                        log.error("Error in code generation stream: {}", error.getMessage(), error);
                         try {
+                            // Try to send error event before completing
                             emitter.send(SseEmitter.event()
                                     .name("error")
-                                    .data("Error: " + error.getMessage()));
-                            emitter.completeWithError(error);
-                        } catch (IOException e) {
-                            emitter.completeWithError(e);
+                                    .data("Error generating code: " + error.getMessage()));
+                            Thread.sleep(100); // Give time for error event to be sent
+                        } catch (Exception e) {
+                            log.debug("Could not send error event (stream may be closed): {}", e.getMessage());
+                        } finally {
+                            try {
+                                emitter.completeWithError(error);
+                            } catch (Exception e) {
+                                log.debug("Emitter already closed, ignoring error completion");
+                            }
                         }
                     },
                     () -> {
                         try {
-                            // Save the complete code to database
-                            project.setFrontendCode(fullCode.toString());
-                            projectRepository.save(project);
+                            String finalCode = fullCode.toString();
+                            log.info("Stream completed. Total code length: {} chars", finalCode.length());
                             
+                            // Save the complete code to database
+                            if (!finalCode.isEmpty()) {
+                                project.setFrontendCode(finalCode);
+                                projectRepository.save(project);
+                                log.info("Saved frontend code to database for project: {}", id);
+                            } else {
+                                log.warn("Stream completed but no code was generated!");
+                                emitter.send(SseEmitter.event()
+                                        .name("error")
+                                        .data("No code was generated. Please check your prompt and Ollama connection."));
+                                Thread.sleep(100);
+                                emitter.complete();
+                                return;
+                            }
+                            
+                            // Send completion event
                             emitter.send(SseEmitter.event()
                                     .name("complete")
-                                    .data("Code generation completed"));
+                                    .data("Code generation completed. Total: " + finalCode.length() + " characters"));
+                            Thread.sleep(200); // Give time for complete event to be sent
                             emitter.complete();
+                            log.info("SSE emitter completed successfully for project: {}", id);
                         } catch (Exception e) {
-                            log.error("Error completing stream", e);
-                            emitter.completeWithError(e);
+                            log.error("Error completing stream: {}", e.getMessage(), e);
+                            try {
+                                emitter.completeWithError(e);
+                            } catch (Exception ex) {
+                                log.debug("Emitter already closed, ignoring completion error");
+                            }
                         }
                     }
                 );
             } catch (Exception e) {
-                log.error("Error starting stream", e);
-                emitter.completeWithError(e);
+                log.error("Error starting code generation stream: {}", e.getMessage(), e);
+                try {
+                    emitter.send(SseEmitter.event()
+                            .name("error")
+                            .data("Failed to start code generation: " + e.getMessage()));
+                    Thread.sleep(100);
+                    emitter.completeWithError(e);
+                } catch (Exception ex) {
+                    log.error("Could not send error event: {}", ex.getMessage());
+                }
             }
         });
 

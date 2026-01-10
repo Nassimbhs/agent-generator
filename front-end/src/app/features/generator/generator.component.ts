@@ -111,10 +111,25 @@ import { AuthService } from '../../core/services/auth.service';
           </div>
         </form>
 
-        <!-- Estimated Time Display -->
-        @if ((estimatedTime > 0 && (streamingBackend || streamingFrontend)) || elapsedTime > 0) {
+        <!-- Status and Progress Display -->
+        @if ((estimatedTime > 0 && (streamingBackend || streamingFrontend)) || elapsedTime > 0 || currentStatus) {
           <div class="mt-4 p-4 bg-blue-50 border-round border-left-3 border-blue-500">
             <div class="flex flex-column gap-3">
+              <!-- Status Message -->
+              @if (currentStatus && (streamingBackend || streamingFrontend)) {
+                <div class="flex align-items-center gap-2 p-3 bg-white border-round shadow-sm">
+                  <i class="pi pi-spin pi-spinner text-blue-500 text-xl"></i>
+                  <div class="flex flex-column flex-1">
+                    <span class="font-semibold text-base text-blue-700">{{ currentStatus }}</span>
+                    @if (generationPhase !== 'initializing' && generationPhase !== 'completing') {
+                      <span class="text-sm text-color-secondary mt-1">{{ getPhaseDescription(generationPhase) }}</span>
+                    }
+                  </div>
+                  <p-tag value="LIVE" severity="success" icon="pi pi-circle-fill"></p-tag>
+                </div>
+              }
+              
+              <!-- Time and Progress -->
               <div class="flex align-items-center justify-content-between">
                 <div class="flex align-items-center gap-2">
                   <i class="pi pi-clock text-blue-500 text-xl"></i>
@@ -125,6 +140,7 @@ import { AuthService } from '../../core/services/auth.service';
                   <p-tag value="LIVE" severity="success" icon="pi pi-circle-fill"></p-tag>
                 }
               </div>
+              
               @if (streamingBackend || streamingFrontend) {
                 <div>
                   <p-progressBar 
@@ -136,6 +152,20 @@ import { AuthService } from '../../core/services/auth.service';
                     <span class="font-semibold">Progress: {{ progressPercentage.toFixed(0) }}%</span>
                     <span>Elapsed: {{ formatTime(elapsedTime) }} / Estimated: {{ formatTime(estimatedTime) }}</span>
                   </div>
+                </div>
+              }
+              
+              <!-- Generation Steps Indicator -->
+              @if (streamingBackend || streamingFrontend) {
+                <div class="flex flex-wrap gap-2 mt-2">
+                  @for (step of getGenerationSteps(); track step.phase) {
+                    <p-tag 
+                      [value]="step.label" 
+                      [severity]="step.completed ? 'success' : (step.active ? 'info' : 'secondary')"
+                      [icon]="step.completed ? 'pi pi-check' : (step.active ? 'pi pi-spin pi-spinner' : 'pi pi-circle')"
+                      styleClass="text-xs">
+                    </p-tag>
+                  }
                 </div>
               }
             </div>
@@ -368,6 +398,11 @@ export class GeneratorComponent implements OnDestroy {
   elapsedTime = 0;
   progressPercentage = 0;
   
+  // Status messages for UX
+  currentStatus = '';
+  statusHistory: string[] = [];
+  generationPhase: 'initializing' | 'entities' | 'repositories' | 'services' | 'controllers' | 'dtos' | 'config' | 'completing' = 'initializing';
+  
   // Project structure for tree display
   backendProjectStructure: ProjectStructure | null = null;
   frontendProjectStructure: ProjectStructure | null = null;
@@ -424,6 +459,9 @@ export class GeneratorComponent implements OnDestroy {
 
     this.streamingBackend = true;
     this.backendCode = '';
+    this.currentStatus = 'Connecting to LLM...';
+    this.generationPhase = 'initializing';
+    this.statusHistory = [];
     this.promptControl?.disable();
     this.startProgressTimer();
 
@@ -436,6 +474,9 @@ export class GeneratorComponent implements OnDestroy {
 
     this.streamingFrontend = true;
     this.frontendCode = '';
+    this.currentStatus = 'Connecting to LLM...';
+    this.generationPhase = 'initializing';
+    this.statusHistory = [];
     this.promptControl?.disable();
     this.startProgressTimer();
 
@@ -483,6 +524,10 @@ export class GeneratorComponent implements OnDestroy {
       if (event.data) {
         this.backendCode += event.data;
         console.log('Total backend code length now:', this.backendCode.length);
+        
+        // Analyze what's being generated and update status
+        this.updateGenerationStatus(this.backendCode, 'backend');
+        
         this.updateBackendProjectStructure();
         this.scrollToBottom('backend-code');
       }
@@ -495,6 +540,8 @@ export class GeneratorComponent implements OnDestroy {
       completed = true;
       
       console.log('Received complete event. Total code length:', this.backendCode.length);
+      this.currentStatus = 'Code generation completed!';
+      this.generationPhase = 'completing';
       this.streamingBackend = false;
       this.promptControl?.enable();
       this.stopProgressTimer();
@@ -505,6 +552,12 @@ export class GeneratorComponent implements OnDestroy {
         if (this.eventSource) {
           this.eventSource.close();
         }
+        // Clear status after a delay
+        setTimeout(() => {
+          this.currentStatus = '';
+          this.generationPhase = 'initializing';
+        }, 2000);
+        
         if (this.backendCode.length > 0) {
           this.messageService.add({ 
             severity: 'success', 
@@ -536,6 +589,7 @@ export class GeneratorComponent implements OnDestroy {
       // Fallback for messages without event name
       if (event.data && !event.data.includes('complete') && !event.data.includes('error')) {
         this.backendCode += event.data;
+        this.updateGenerationStatus(this.backendCode, 'backend');
         this.updateBackendProjectStructure();
         this.scrollToBottom('backend-code');
       }
@@ -603,6 +657,10 @@ export class GeneratorComponent implements OnDestroy {
       if (event.data) {
         this.frontendCode += event.data;
         console.log('Total frontend code length now:', this.frontendCode.length);
+        
+        // Analyze what's being generated and update status
+        this.updateGenerationStatus(this.frontendCode, 'frontend');
+        
         this.updateFrontendProjectStructure();
         this.scrollToBottom('frontend-code');
       }
@@ -615,6 +673,8 @@ export class GeneratorComponent implements OnDestroy {
       frontendCompleted = true;
       
       console.log('Received complete event. Total code length:', this.frontendCode.length);
+      this.currentStatus = 'Code generation completed!';
+      this.generationPhase = 'completing';
       this.streamingFrontend = false;
       this.promptControl?.enable();
       this.stopProgressTimer();
@@ -622,6 +682,12 @@ export class GeneratorComponent implements OnDestroy {
       
       setTimeout(() => {
         frontendEventSource.close();
+        // Clear status after a delay
+        setTimeout(() => {
+          this.currentStatus = '';
+          this.generationPhase = 'initializing';
+        }, 2000);
+        
         if (this.frontendCode.length > 0) {
           this.messageService.add({ 
             severity: 'success', 
@@ -653,6 +719,7 @@ export class GeneratorComponent implements OnDestroy {
       // Fallback for messages without event name
       if (event.data && !event.data.includes('complete') && !event.data.includes('error')) {
         this.frontendCode += event.data;
+        this.updateGenerationStatus(this.frontendCode, 'frontend');
         this.updateFrontendProjectStructure();
         this.scrollToBottom('frontend-code');
       }
@@ -873,6 +940,134 @@ export class GeneratorComponent implements OnDestroy {
         });
       }
     });
+  }
+
+  // Status and phase detection methods
+  private updateGenerationStatus(code: string, type: 'backend' | 'frontend'): void {
+    if (!code || code.length < 50) {
+      this.currentStatus = 'Analyzing requirements and initializing...';
+      this.generationPhase = 'initializing';
+      return;
+    }
+
+    if (type === 'backend') {
+      this.detectBackendPhase(code);
+    } else {
+      this.detectFrontendPhase(code);
+    }
+  }
+
+  private detectBackendPhase(code: string): void {
+    const lowerCode = code.toLowerCase();
+    
+    // Check for entity files
+    if (lowerCode.includes('@entity') || lowerCode.includes('class') && lowerCode.includes('entity')) {
+      if (this.generationPhase !== 'entities') {
+        this.generationPhase = 'entities';
+        this.currentStatus = 'Generating Entity classes...';
+        this.addStatusHistory('Creating JPA entities');
+      }
+    }
+    // Check for repository files
+    else if (lowerCode.includes('repository') || lowerCode.includes('extends jparepository')) {
+      if (this.generationPhase !== 'repositories') {
+        this.generationPhase = 'repositories';
+        this.currentStatus = 'Creating Repository interfaces...';
+        this.addStatusHistory('Generating Spring Data repositories');
+      }
+    }
+    // Check for service files
+    else if (lowerCode.includes('@service') || (lowerCode.includes('service') && lowerCode.includes('interface'))) {
+      if (this.generationPhase !== 'services') {
+        this.generationPhase = 'services';
+        this.currentStatus = 'Writing Service layer...';
+        this.addStatusHistory('Implementing service interfaces');
+      }
+    }
+    // Check for controller files
+    else if (lowerCode.includes('@restcontroller') || lowerCode.includes('@controller')) {
+      if (this.generationPhase !== 'controllers') {
+        this.generationPhase = 'controllers';
+        this.currentStatus = 'Creating REST Controllers...';
+        this.addStatusHistory('Building REST API endpoints');
+      }
+    }
+    // Check for DTO files
+    else if (lowerCode.includes('dto') || (lowerCode.includes('request') && lowerCode.includes('response'))) {
+      if (this.generationPhase !== 'dtos') {
+        this.generationPhase = 'dtos';
+        this.currentStatus = 'Generating DTO classes...';
+        this.addStatusHistory('Creating data transfer objects');
+      }
+    }
+    // Check for config files
+    else if (lowerCode.includes('application.properties') || lowerCode.includes('pom.xml') || lowerCode.includes('@configuration')) {
+      if (this.generationPhase !== 'config') {
+        this.generationPhase = 'config';
+        this.currentStatus = 'Setting up configuration files...';
+        this.addStatusHistory('Configuring application settings');
+      }
+    }
+  }
+
+  private detectFrontendPhase(code: string): void {
+    const lowerCode = code.toLowerCase();
+    
+    if (lowerCode.includes('interface') || lowerCode.includes('export interface')) {
+      this.currentStatus = 'Generating TypeScript interfaces...';
+      this.generationPhase = 'entities';
+    } else if (lowerCode.includes('component') || lowerCode.includes('@component')) {
+      this.currentStatus = 'Creating Angular components...';
+      this.generationPhase = 'controllers';
+    } else if (lowerCode.includes('service') && lowerCode.includes('@injectable')) {
+      this.currentStatus = 'Building Angular services...';
+      this.generationPhase = 'services';
+    } else if (lowerCode.includes('html') || lowerCode.includes('.html')) {
+      this.currentStatus = 'Generating HTML templates...';
+      this.generationPhase = 'config';
+    } else if (lowerCode.includes('package.json') || lowerCode.includes('tsconfig')) {
+      this.currentStatus = 'Setting up project configuration...';
+      this.generationPhase = 'config';
+    } else {
+      this.currentStatus = 'Generating frontend code...';
+    }
+  }
+
+  private addStatusHistory(message: string): void {
+    if (!this.statusHistory.includes(message)) {
+      this.statusHistory.push(message);
+      // Keep only last 5 status messages
+      if (this.statusHistory.length > 5) {
+        this.statusHistory.shift();
+      }
+    }
+  }
+
+  getPhaseDescription(phase: string): string {
+    const descriptions: { [key: string]: string } = {
+      'initializing': 'Preparing to generate code...',
+      'entities': 'Creating data models and entity classes',
+      'repositories': 'Setting up data access layer',
+      'services': 'Implementing business logic',
+      'controllers': 'Building REST API endpoints',
+      'dtos': 'Creating data transfer objects',
+      'config': 'Configuring application settings',
+      'completing': 'Finalizing code generation'
+    };
+    return descriptions[phase] || 'Generating code...';
+  }
+
+  getGenerationSteps(): Array<{ phase: string; label: string; completed: boolean; active: boolean }> {
+    const steps = [
+      { phase: 'initializing', label: 'Init', completed: this.generationPhase !== 'initializing', active: this.generationPhase === 'initializing' },
+      { phase: 'entities', label: 'Entities', completed: ['repositories', 'services', 'controllers', 'dtos', 'config', 'completing'].includes(this.generationPhase), active: this.generationPhase === 'entities' },
+      { phase: 'repositories', label: 'Repos', completed: ['services', 'controllers', 'dtos', 'config', 'completing'].includes(this.generationPhase), active: this.generationPhase === 'repositories' },
+      { phase: 'services', label: 'Services', completed: ['controllers', 'dtos', 'config', 'completing'].includes(this.generationPhase), active: this.generationPhase === 'services' },
+      { phase: 'controllers', label: 'Controllers', completed: ['dtos', 'config', 'completing'].includes(this.generationPhase), active: this.generationPhase === 'controllers' },
+      { phase: 'dtos', label: 'DTOs', completed: ['config', 'completing'].includes(this.generationPhase), active: this.generationPhase === 'dtos' },
+      { phase: 'config', label: 'Config', completed: this.generationPhase === 'completing', active: this.generationPhase === 'config' }
+    ];
+    return steps;
   }
 
   downloadProjectZip(structure: ProjectStructure): void {

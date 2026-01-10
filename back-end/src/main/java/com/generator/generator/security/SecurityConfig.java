@@ -18,6 +18,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Arrays;
 import java.util.List;
 
@@ -46,6 +47,52 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(exception -> exception
+                // Handle exceptions gracefully for SSE endpoints
+                // If response is already committed (SSE started), don't try to modify it
+                .authenticationEntryPoint((request, response, authException) -> {
+                    // Check if response is already committed (SSE streams commit early)
+                    if (response.isCommitted()) {
+                        // Response already sent, can't modify it - controller handles errors
+                        return;
+                    }
+                    String path = request.getRequestURI();
+                    if (path != null && path.contains("/stream")) {
+                        // For SSE endpoints, controller validates auth before creating emitter
+                        // If we reach here, something went wrong but response not committed yet
+                        return; // Let controller handle it
+                    }
+                    // For non-SSE endpoints, send error response
+                    try {
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType("application/json");
+                        response.getWriter().write("{\"error\":\"Unauthorized\"}");
+                    } catch (Exception e) {
+                        // Response might have been committed in the meantime
+                    }
+                })
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    // Check if response is already committed (SSE streams commit early)
+                    if (response.isCommitted()) {
+                        // Response already sent, can't modify it - controller handles errors
+                        return;
+                    }
+                    String path = request.getRequestURI();
+                    if (path != null && path.contains("/stream")) {
+                        // For SSE endpoints, controller validates auth before creating emitter
+                        // If we reach here, something went wrong but response not committed yet
+                        return; // Let controller handle it
+                    }
+                    // For non-SSE endpoints, send error response
+                    try {
+                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        response.setContentType("application/json");
+                        response.getWriter().write("{\"error\":\"Access Denied\"}");
+                    } catch (Exception e) {
+                        // Response might have been committed in the meantime
+                    }
+                })
+            )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()

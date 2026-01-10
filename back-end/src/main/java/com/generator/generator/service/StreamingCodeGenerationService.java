@@ -36,18 +36,55 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
 
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
+    private final ExistingProjectReaderService projectReaderService;
 
     @Override
     public Flux<String> generateSpringBootCrudStream(String prompt) {
-        String systemPrompt = buildSpringBootPrompt(prompt);
-        log.info("Streaming Spring Boot CRUD code generation for prompt: {}", prompt);
+        return generateSpringBootCrudStream(prompt, null);
+    }
+
+    @Override
+    public Flux<String> generateSpringBootCrudStream(String prompt, String existingProjectPath) {
+        // Conditionally read existing project files (Hybrid Approach - Option 3)
+        String existingCode = "";
+        if (existingProjectPath != null && !existingProjectPath.trim().isEmpty()) {
+            log.info("Reading existing project files from: {}", existingProjectPath);
+            existingCode = projectReaderService.readProjectFiles(existingProjectPath);
+            if (!existingCode.isEmpty()) {
+                log.info("Found existing project files, including in context ({} chars)", existingCode.length());
+            } else {
+                log.warn("No existing project files found at path: {}", existingProjectPath);
+            }
+        }
+        
+        String systemPrompt = buildSpringBootPrompt(prompt, existingCode);
+        log.info("Streaming Spring Boot CRUD code generation for prompt: {} (with existing code: {})", 
+                prompt, !existingCode.isEmpty() ? "yes" : "no");
         return generateCodeStream(systemPrompt);
     }
 
     @Override
     public Flux<String> generateAngularInterfacesStream(String prompt) {
-        String systemPrompt = buildAngularPrompt(prompt);
-        log.info("Streaming Angular TypeScript interfaces generation for prompt: {}", prompt);
+        return generateAngularInterfacesStream(prompt, null);
+    }
+
+    @Override
+    public Flux<String> generateAngularInterfacesStream(String prompt, String existingProjectPath) {
+        // Conditionally read existing project files (Hybrid Approach - Option 3)
+        String existingCode = "";
+        if (existingProjectPath != null && !existingProjectPath.trim().isEmpty()) {
+            log.info("Reading existing project files from: {}", existingProjectPath);
+            existingCode = projectReaderService.readProjectFiles(existingProjectPath);
+            if (!existingCode.isEmpty()) {
+                log.info("Found existing project files, including in context ({} chars)", existingCode.length());
+            } else {
+                log.warn("No existing project files found at path: {}", existingProjectPath);
+            }
+        }
+        
+        String systemPrompt = buildAngularPrompt(prompt, existingCode);
+        log.info("Streaming Angular TypeScript interfaces generation for prompt: {} (with existing code: {})", 
+                prompt, !existingCode.isEmpty() ? "yes" : "no");
         return generateCodeStream(systemPrompt);
     }
 
@@ -154,56 +191,134 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
         }
     }
 
-    private String buildSpringBootPrompt(String userPrompt) {
-        return String.format("""
-            You are a Spring Boot expert. Generate a complete Spring Boot CRUD application based on the requirements.
-            
-            Format each file as:
-            
-            FILE: path/to/file.ext
-            ```language
-            // file content here
-            ```
-            
-            Requirements: %s
-            
-            Generate all Spring Boot files needed:
-            1. Entity classes (JPA entities)
-            2. Repository interfaces (Spring Data JPA)
-            3. Service interfaces (IService)
-            4. Service implementations
-            5. Controller classes (REST controllers)
-            6. DTO classes (Request/Response)
-            7. Configuration files (application.properties, pom.xml)
-            8. Main application class
-            
-            For each file, show the complete code with proper imports. Use proper Java package structure.
-            Return ONLY the files with the format above, no explanations between files.
-            Start generating files now.
-            """, userPrompt);
+    private String buildSpringBootPrompt(String userPrompt, String existingCode) {
+        if (existingCode != null && !existingCode.trim().isEmpty()) {
+            // Enhanced prompt with existing code context
+            return String.format("""
+                You are a Spring Boot expert working on an EXISTING project.
+                
+                %s
+                
+                Based on the existing code above, generate or modify files to meet these requirements:
+                %s
+                
+                IMPORTANT INSTRUCTIONS:
+                - For EXISTING files that need changes: Show ONLY the modified sections or complete file with changes highlighted
+                - For NEW files: Show the complete file with the FILE: format
+                - Preserve existing code structure, patterns, and conventions
+                - Maintain package structure and naming conventions from existing code
+                - Only generate files that need to be created or modified
+                
+                Format each file as:
+                
+                FILE: path/to/file.ext
+                ```language
+                // file content here
+                ```
+                
+                Generate only the Spring Boot files needed:
+                1. Entity classes (JPA entities) - NEW or MODIFIED only
+                2. Repository interfaces (Spring Data JPA) - NEW or MODIFIED only
+                3. Service interfaces (IService) - NEW or MODIFIED only
+                4. Service implementations - NEW or MODIFIED only
+                5. Controller classes (REST controllers) - NEW or MODIFIED only
+                6. DTO classes (Request/Response) - NEW or MODIFIED only
+                7. Configuration files - MODIFIED sections only if needed
+                8. Main application class - MODIFIED only if needed
+                
+                For each file, show the complete code with proper imports. Use proper Java package structure matching the existing project.
+                Return ONLY the files that need to be created or modified with the format above, no explanations between files.
+                Start generating files now.
+                """, existingCode, userPrompt);
+        } else {
+            // Original prompt for new projects (fast path)
+            return String.format("""
+                You are a Spring Boot expert. Generate a complete Spring Boot CRUD application based on the requirements.
+                
+                Format each file as:
+                
+                FILE: path/to/file.ext
+                ```language
+                // file content here
+                ```
+                
+                Requirements: %s
+                
+                Generate all Spring Boot files needed:
+                1. Entity classes (JPA entities)
+                2. Repository interfaces (Spring Data JPA)
+                3. Service interfaces (IService)
+                4. Service implementations
+                5. Controller classes (REST controllers)
+                6. DTO classes (Request/Response)
+                7. Configuration files (application.properties, pom.xml)
+                8. Main application class
+                
+                For each file, show the complete code with proper imports. Use proper Java package structure.
+                Return ONLY the files with the format above, no explanations between files.
+                Start generating files now.
+                """, userPrompt);
+        }
     }
 
-    private String buildAngularPrompt(String userPrompt) {
-        return """
-            Generate a complete project structure with all files. Format each file as:
-            
-            FILE: path/to/file.ext
-            ```language
-            // file content here
-            ```
-            
-            Requirements: %s
-            
-            Generate all files needed for the project:
-            1. HTML files (index.html, etc.)
-            2. CSS files (styles.css, etc.)
-            3. JavaScript files (app.js, etc.)
-            4. Configuration files (package.json, README.md, etc.)
-            5. Any other necessary files
-            
-            For each file, show the full path and complete code. Use proper file structure with folders.
-            Return ONLY the files with the format above, no explanations between files.
-            """.formatted(userPrompt);
+    private String buildAngularPrompt(String userPrompt, String existingCode) {
+        if (existingCode != null && !existingCode.trim().isEmpty()) {
+            // Enhanced prompt with existing code context
+            return String.format("""
+                You are an Angular/TypeScript expert working on an EXISTING project.
+                
+                %s
+                
+                Based on the existing code above, generate or modify files to meet these requirements:
+                %s
+                
+                IMPORTANT INSTRUCTIONS:
+                - For EXISTING files that need changes: Show ONLY the modified sections or complete file with changes
+                - For NEW files: Show the complete file with the FILE: format
+                - Preserve existing code structure, patterns, and conventions
+                - Maintain file structure and naming conventions from existing code
+                - Only generate files that need to be created or modified
+                
+                Format each file as:
+                
+                FILE: path/to/file.ext
+                ```language
+                // file content here
+                ```
+                
+                Generate only the files needed:
+                1. HTML files - NEW or MODIFIED only
+                2. CSS files - NEW or MODIFIED only
+                3. TypeScript/JavaScript files - NEW or MODIFIED only
+                4. Configuration files (package.json, etc.) - MODIFIED sections only if needed
+                5. Any other necessary files - NEW only
+                
+                For each file, show the full path and complete code. Use proper file structure with folders matching the existing project.
+                Return ONLY the files that need to be created or modified with the format above, no explanations between files.
+                """, existingCode, userPrompt);
+        } else {
+            // Original prompt for new projects (fast path)
+            return """
+                Generate a complete project structure with all files. Format each file as:
+                
+                FILE: path/to/file.ext
+                ```language
+                // file content here
+                ```
+                
+                Requirements: %s
+                
+                Generate all files needed for the project:
+                1. HTML files (index.html, etc.)
+                2. CSS files (styles.css, etc.)
+                3. JavaScript files (app.js, etc.)
+                4. Configuration files (package.json, README.md, etc.)
+                5. Any other necessary files
+                
+                For each file, show the full path and complete code. Use proper file structure with folders.
+                Return ONLY the files with the format above, no explanations between files.
+                """.formatted(userPrompt);
+        }
     }
 
     @Override
