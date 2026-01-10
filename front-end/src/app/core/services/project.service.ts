@@ -43,5 +43,19 @@ export class ProjectService {
   generateFrontendCode(id: number): Observable<Project> {
     return this.http.post<Project>(`${this.apiUrl}/${id}/generate/frontend`, {});
   }
+
+  streamBackendCode(id: number): EventSource {
+    const token = localStorage.getItem('token');
+    // EventSource doesn't support custom headers, so we'll use query param
+    // Note: For production, consider using WebSocket or fetch with ReadableStream
+    const url = `${environment.apiUrl}/api/projects/${id}/generate/backend/stream?token=${encodeURIComponent(token || '')}`;
+    return new EventSource(url);
+  }
+
+  streamFrontendCode(id: number): EventSource {
+    const token = localStorage.getItem('token');
+    const url = `${environment.apiUrl}/api/projects/${id}/generate/frontend/stream?token=${encodeURIComponent(token || '')}`;
+    return new EventSource(url);
+  }
 }
 

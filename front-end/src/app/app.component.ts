@@ -63,6 +63,11 @@ export class AppComponent {
     if (this.currentUser) {
       this.menuItems = [
         {
+          label: 'Generator',
+          icon: 'pi pi-fw pi-code',
+          routerLink: '/generator'
+        },
+        {
           label: 'Projects',
           icon: 'pi pi-fw pi-folder',
           routerLink: '/projects'

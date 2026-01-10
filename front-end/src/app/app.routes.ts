@@ -4,7 +4,7 @@ import { authGuard } from './core/guards/auth.guard';
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: '/projects',
+    redirectTo: '/generator',
     pathMatch: 'full'
   },
   {
@@ -14,6 +14,11 @@ export const routes: Routes = [
   {
     path: 'register',
     loadComponent: () => import('./features/auth/register/register.component').then(m => m.RegisterComponent)
+  },
+  {
+    path: 'generator',
+    loadComponent: () => import('./features/generator/generator.component').then(m => m.GeneratorComponent),
+    canActivate: [authGuard]
   },
   {
     path: 'projects',

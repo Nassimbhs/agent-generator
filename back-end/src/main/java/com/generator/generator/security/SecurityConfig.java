@@ -50,6 +50,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/api/users/register", "/api/users/login").permitAll()
+                .requestMatchers("/api/projects/**/generate/**/stream").authenticated()
+                .requestMatchers("/api/generate/**/stream").authenticated()
                 .anyRequest().authenticated()
             )
             .userDetailsService(userDetailsService)
@@ -69,12 +71,14 @@ public class SecurityConfig {
             "http://102.211.210.197",
             "http://102.211.210.197:80",
             "http://102.211.210.197:4200",
-            "http://102.211.210.197:8080"
+            "http://102.211.210.197:8080",
+            "http://102.211.210.197:8090",
+            "http://localhost:8090"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
-        configuration.setExposedHeaders(Arrays.asList("Authorization", "Content-Type"));
+        configuration.setExposedHeaders(Arrays.asList("Authorization", "Content-Type", "Cache-Control", "X-Accel-Buffering"));
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

@@ -50,6 +50,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return bearerToken.substring(7);
         }
 
+        // Then try to get from query parameter (for SSE/EventSource)
+        String tokenParam = request.getParameter("token");
+        if (tokenParam != null && !tokenParam.isEmpty()) {
+            return tokenParam;
+        }
+
         // Then try to get from cookie
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {

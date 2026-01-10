@@ -69,23 +69,26 @@ import { Project } from '../../../models/project.model';
             label="Generate All Code" 
             icon="pi pi-code"
             (onClick)="generateCode()"
-            [loading]="generating">
+            [loading]="generating"
+            [disabled]="streamingBackend || streamingFrontend">
           </p-button>
           <p-button 
-            label="Generate Backend" 
+            label="Generate Backend (Live)" 
             icon="pi pi-server"
             severity="secondary"
             [outlined]="true"
-            (onClick)="generateBackendCode()"
-            [loading]="generatingBackend">
+            (onClick)="streamBackendCode()"
+            [loading]="streamingBackend"
+            [disabled]="streamingFrontend">
           </p-button>
           <p-button 
-            label="Generate Frontend" 
+            label="Generate Frontend (Live)" 
             icon="pi pi-desktop"
             severity="secondary"
             [outlined]="true"
-            (onClick)="generateFrontendCode()"
-            [loading]="generatingFrontend">
+            (onClick)="streamFrontendCode()"
+            [loading]="streamingFrontend"
+            [disabled]="streamingBackend">
           </p-button>
         </div>
 
@@ -97,20 +100,36 @@ import { Project } from '../../../models/project.model';
             </p-card>
           </p-tabPanel>
 
-          <p-tabPanel header="Backend Code" [disabled]="!project.backendCode">
-            @if (project.backendCode) {
+          <p-tabPanel header="Backend Code" [disabled]="!project.backendCode && !streamingBackend">
+            @if (streamingBackend || project.backendCode) {
               <p-card>
-                <div class="flex justify-content-end mb-2">
+                <div class="flex justify-content-between align-items-center mb-2">
+                  @if (streamingBackend) {
+                    <div class="flex align-items-center gap-2">
+                      <i class="pi pi-spin pi-spinner text-primary"></i>
+                      <span class="text-sm text-color-secondary">Generating code...</span>
+                    </div>
+                  } @else {
+                    <div></div>
+                  }
                   <p-button 
                     label="Copy" 
                     icon="pi pi-copy"
                     size="small"
                     [text]="true"
-                    (onClick)="copyToClipboard(project.backendCode!)">
+                    [disabled]="streamingBackend"
+                    (onClick)="copyToClipboard(project.backendCode || streamingCode)">
                   </p-button>
                 </div>
-                <pre class="p-3 m-0 bg-gray-50 border-round text-sm line-height-3 overflow-auto" 
-                     style="max-height: 600px;">{{ project.backendCode }}</pre>
+                <div class="relative">
+                  <pre class="p-3 m-0 bg-gray-50 border-round text-sm line-height-3 overflow-auto font-mono" 
+                       style="max-height: 600px; white-space: pre-wrap; word-wrap: break-word;">{{ streamingBackend ? streamingCode : project.backendCode }}</pre>
+                  @if (streamingBackend) {
+                    <div class="absolute top-0 right-0 p-2">
+                      <span class="text-xs bg-primary text-white border-round px-2 py-1">LIVE</span>
+                    </div>
+                  }
+                </div>
               </p-card>
             } @else {
               <p-card>
@@ -122,20 +141,36 @@ import { Project } from '../../../models/project.model';
             }
           </p-tabPanel>
 
-          <p-tabPanel header="Frontend Code" [disabled]="!project.frontendCode">
-            @if (project.frontendCode) {
+          <p-tabPanel header="Frontend Code" [disabled]="!project.frontendCode && !streamingFrontend">
+            @if (streamingFrontend || project.frontendCode) {
               <p-card>
-                <div class="flex justify-content-end mb-2">
+                <div class="flex justify-content-between align-items-center mb-2">
+                  @if (streamingFrontend) {
+                    <div class="flex align-items-center gap-2">
+                      <i class="pi pi-spin pi-spinner text-primary"></i>
+                      <span class="text-sm text-color-secondary">Generating code...</span>
+                    </div>
+                  } @else {
+                    <div></div>
+                  }
                   <p-button 
                     label="Copy" 
                     icon="pi pi-copy"
                     size="small"
                     [text]="true"
-                    (onClick)="copyToClipboard(project.frontendCode!)">
+                    [disabled]="streamingFrontend"
+                    (onClick)="copyToClipboard(project.frontendCode || streamingCode)">
                   </p-button>
                 </div>
-                <pre class="p-3 m-0 bg-gray-50 border-round text-sm line-height-3 overflow-auto" 
-                     style="max-height: 600px;">{{ project.frontendCode }}</pre>
+                <div class="relative">
+                  <pre class="p-3 m-0 bg-gray-50 border-round text-sm line-height-3 overflow-auto font-mono" 
+                       style="max-height: 600px; white-space: pre-wrap; word-wrap: break-word;">{{ streamingFrontend ? streamingCode : project.frontendCode }}</pre>
+                  @if (streamingFrontend) {
+                    <div class="absolute top-0 right-0 p-2">
+                      <span class="text-xs bg-primary text-white border-round px-2 py-1">LIVE</span>
+                    </div>
+                  }
+                </div>
               </p-card>
             } @else {
               <p-card>
@@ -159,6 +194,10 @@ export class ProjectDetailComponent implements OnInit {
   generating = false;
   generatingBackend = false;
   generatingFrontend = false;
+  streamingBackend = false;
+  streamingFrontend = false;
+  streamingCode = '';
+  currentStreamingType: 'backend' | 'frontend' | null = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -237,6 +276,122 @@ export class ProjectDetailComponent implements OnInit {
         }
       });
     }
+  }
+
+  streamBackendCode(): void {
+    if (!this.project) return;
+    
+    this.streamingBackend = true;
+    this.streamingCode = '';
+    this.currentStreamingType = 'backend';
+    
+    const eventSource = this.projectService.streamBackendCode(this.project.id);
+    
+    // Handle code chunks
+    eventSource.addEventListener('code-chunk', (event: MessageEvent) => {
+      this.streamingCode += event.data;
+      this.scrollToBottom();
+    });
+    
+    // Handle completion
+    eventSource.addEventListener('complete', () => {
+      eventSource.close();
+      this.streamingBackend = false;
+      this.streamingCode = '';
+      this.loadProject(this.project!.id);
+      this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Backend code generated successfully!' });
+    });
+    
+    // Handle errors
+    eventSource.addEventListener('error', (event: MessageEvent) => {
+      if (event.data) {
+        this.messageService.add({ severity: 'error', summary: 'Error', detail: event.data });
+      }
+    });
+    
+    // Fallback for default messages
+    eventSource.onmessage = (event) => {
+      if (event.data === 'Code generation completed') {
+        eventSource.close();
+        this.streamingBackend = false;
+        this.streamingCode = '';
+        this.loadProject(this.project!.id);
+        this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Backend code generated successfully!' });
+      } else {
+        this.streamingCode += event.data;
+        this.scrollToBottom();
+      }
+    };
+    
+    eventSource.onerror = () => {
+      eventSource.close();
+      this.streamingBackend = false;
+      this.streamingCode = '';
+      this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Streaming connection failed. Please try again.' });
+    };
+  }
+
+  streamFrontendCode(): void {
+    if (!this.project) return;
+    
+    this.streamingFrontend = true;
+    this.streamingCode = '';
+    this.currentStreamingType = 'frontend';
+    
+    const eventSource = this.projectService.streamFrontendCode(this.project.id);
+    
+    // Handle code chunks
+    eventSource.addEventListener('code-chunk', (event: MessageEvent) => {
+      this.streamingCode += event.data;
+      this.scrollToBottom();
+    });
+    
+    // Handle completion
+    eventSource.addEventListener('complete', () => {
+      eventSource.close();
+      this.streamingFrontend = false;
+      this.streamingCode = '';
+      this.loadProject(this.project!.id);
+      this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Frontend code generated successfully!' });
+    });
+    
+    // Handle errors
+    eventSource.addEventListener('error', (event: MessageEvent) => {
+      if (event.data) {
+        this.messageService.add({ severity: 'error', summary: 'Error', detail: event.data });
+      }
+    });
+    
+    // Fallback for default messages
+    eventSource.onmessage = (event) => {
+      if (event.data === 'Code generation completed') {
+        eventSource.close();
+        this.streamingFrontend = false;
+        this.streamingCode = '';
+        this.loadProject(this.project!.id);
+        this.messageService.add({ severity: 'success', summary: 'Success', detail: 'Frontend code generated successfully!' });
+      } else {
+        this.streamingCode += event.data;
+        this.scrollToBottom();
+      }
+    };
+    
+    eventSource.onerror = () => {
+      eventSource.close();
+      this.streamingFrontend = false;
+      this.streamingCode = '';
+      this.messageService.add({ severity: 'error', summary: 'Error', detail: 'Streaming connection failed. Please try again.' });
+    };
+  }
+
+  private scrollToBottom(): void {
+    setTimeout(() => {
+      const preElements = document.querySelectorAll('pre');
+      const lastPre = preElements[preElements.length - 1];
+      if (lastPre) {
+        lastPre.scrollTop = lastPre.scrollHeight;
+      }
+    }, 100);
   }
 
   editProject(): void {
