@@ -11,15 +11,18 @@ import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class StreamingCodeGenerationService {
+public class StreamingCodeGenerationService implements IStreamingCodeGenerationService {
 
     @Value("${ollama.api.url:http://localhost:11434}")
     private String ollamaApiUrl;
@@ -33,12 +36,14 @@ public class StreamingCodeGenerationService {
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
 
+    @Override
     public Flux<String> generateSpringBootCrudStream(String prompt) {
         String systemPrompt = buildSpringBootPrompt(prompt);
         log.info("Streaming Spring Boot CRUD code generation for prompt: {}", prompt);
         return generateCodeStream(systemPrompt);
     }
 
+    @Override
     public Flux<String> generateAngularInterfacesStream(String prompt) {
         String systemPrompt = buildAngularPrompt(prompt);
         log.info("Streaming Angular TypeScript interfaces generation for prompt: {}", prompt);
@@ -72,26 +77,29 @@ public class StreamingCodeGenerationService {
                     // Split by newlines and filter empty lines
                     String[] lines = content.split("\\r?\\n");
                     return Flux.fromArray(lines)
-                            .filter(line -> !line.trim().isEmpty());
+                            .filter(line -> line != null && !line.trim().isEmpty());
                 })
                 .map(this::parseOllamaResponse)
                 .filter(response -> response != null)
                 .filter(response -> {
                     // Skip if response contains refusal messages
                     String responseText = response.getResponse();
-                    if (responseText != null) {
-                        String lower = responseText.toLowerCase();
-                        if (lower.contains("i'm sorry") || lower.contains("i can't") || 
-                            lower.contains("cannot") || lower.contains("unable to") ||
-                            lower.contains("not able")) {
-                            log.warn("LLM returned refusal, skipping: {}", responseText);
-                            return false;
-                        }
+                    if (responseText == null || responseText.isEmpty()) {
+                        return false;
                     }
-                    return responseText != null && !responseText.isEmpty();
+                    String lower = responseText.toLowerCase();
+                    if (lower.contains("i'm sorry") || lower.contains("i can't") || 
+                        lower.contains("cannot") || lower.contains("unable to") ||
+                        lower.contains("not able")) {
+                        log.warn("LLM returned refusal, skipping: {}", responseText);
+                        return false;
+                    }
+                    return true;
                 })
                 .takeUntil(response -> Boolean.TRUE.equals(response.getDone()))
+                .filter(response -> response.getResponse() != null && !response.getResponse().isEmpty())
                 .map(OllamaResponse::getResponse)
+                .filter(text -> text != null && !text.isEmpty())
                 .doOnNext(chunk -> log.debug("Received chunk: {}", chunk.substring(0, Math.min(50, chunk.length()))))
                 .doOnError(error -> log.error("Error in streaming Ollama call: {}", error.getMessage(), error))
                 .doOnComplete(() -> log.info("Streaming completed successfully"))
@@ -116,42 +124,166 @@ public class StreamingCodeGenerationService {
 
     private String buildSpringBootPrompt(String userPrompt) {
         return """
-            Generate Spring Boot CRUD code. Return ONLY Java code, no explanations.
+            Generate a complete project structure with all files. Format each file as:
+            
+            FILE: path/to/file.ext
+            ```language
+            // file content here
+            ```
             
             Requirements: %s
             
-            Create:
-            1. Entity class with JPA annotations
-            2. Repository interface extending JpaRepository<Entity, Long>
-            3. Service interface with CRUD methods
-            4. Service implementation with all CRUD operations  
-            5. REST Controller with @GetMapping, @PostMapping, @PutMapping, @DeleteMapping
-            6. DTO classes for request and response
-            7. Use Lombok: @Data, @Builder, @NoArgsConstructor, @AllArgsConstructor
-            8. Add validation: @NotNull, @NotBlank, @Size
-            9. Add Swagger: @Operation, @ApiResponse
-            10. Include error handling
+            Generate all files needed for the project:
+            1. HTML files (index.html, etc.)
+            2. CSS files (styles.css, etc.)
+            3. JavaScript files (app.js, etc.)
+            4. Configuration files (package.json, README.md, etc.)
+            5. Any other necessary files
             
-            Use Spring Boot 4.0.1, Java 17, PostgreSQL. Return complete Java code only.
+            For each file, show the full path and complete code. Use proper file structure with folders.
+            Return ONLY the files with the format above, no explanations between files.
             """.formatted(userPrompt);
     }
 
     private String buildAngularPrompt(String userPrompt) {
         return """
-            Generate Angular TypeScript interfaces. Return ONLY TypeScript code, no explanations.
+            Generate a complete project structure with all files. Format each file as:
+            
+            FILE: path/to/file.ext
+            ```language
+            // file content here
+            ```
             
             Requirements: %s
             
-            Create TypeScript interfaces with:
-            1. Proper types: string, number, boolean, Date
-            2. Optional properties with '?'
-            3. Export interfaces
-            4. PascalCase for interfaces, camelCase for properties
-            5. All fields from backend entity
-            6. Types for relationships (arrays, nested objects)
+            Generate all files needed for the project:
+            1. HTML files (index.html, etc.)
+            2. CSS files (styles.css, etc.)
+            3. JavaScript files (app.js, etc.)
+            4. Configuration files (package.json, README.md, etc.)
+            5. Any other necessary files
             
-            Use Angular 17+, TypeScript 5+. Return complete TypeScript code only.
+            For each file, show the full path and complete code. Use proper file structure with folders.
+            Return ONLY the files with the format above, no explanations between files.
             """.formatted(userPrompt);
+    }
+
+    @Override
+    public SseEmitter streamBackendCode(String prompt, SseEmitter emitter) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                StringBuilder fullCode = new StringBuilder();
+                
+                Flux<String> codeStream = generateSpringBootCrudStream(prompt);
+                
+                codeStream.subscribe(
+                    chunk -> {
+                        try {
+                            fullCode.append(chunk);
+                            emitter.send(SseEmitter.event()
+                                    .name("code-chunk")
+                                    .data(chunk));
+                        } catch (IOException e) {
+                            log.error("Error sending chunk", e);
+                            emitter.completeWithError(e);
+                        }
+                    },
+                    error -> {
+                        log.error("Error in stream", error);
+                        try {
+                            emitter.send(SseEmitter.event()
+                                    .name("error")
+                                    .data("Error: " + error.getMessage()));
+                            emitter.completeWithError(error);
+                        } catch (IOException e) {
+                            emitter.completeWithError(e);
+                        }
+                    },
+                    () -> {
+                        try {
+                            log.info("Stream completed, sending final event");
+                            emitter.send(SseEmitter.event()
+                                    .name("complete")
+                                    .data("Code generation completed"));
+                            Thread.sleep(100);
+                            emitter.complete();
+                            log.info("SSE emitter completed successfully");
+                        } catch (Exception e) {
+                            log.error("Error completing stream", e);
+                            try {
+                                emitter.completeWithError(e);
+                            } catch (Exception ex) {
+                                log.error("Error completing emitter with error", ex);
+                            }
+                        }
+                    }
+                );
+            } catch (Exception e) {
+                log.error("Error starting stream", e);
+                emitter.completeWithError(e);
+            }
+        });
+        
+        return emitter;
+    }
+
+    @Override
+    public SseEmitter streamFrontendCode(String prompt, SseEmitter emitter) {
+        CompletableFuture.runAsync(() -> {
+            try {
+                StringBuilder fullCode = new StringBuilder();
+                
+                Flux<String> codeStream = generateAngularInterfacesStream(prompt);
+                
+                codeStream.subscribe(
+                    chunk -> {
+                        try {
+                            fullCode.append(chunk);
+                            emitter.send(SseEmitter.event()
+                                    .name("code-chunk")
+                                    .data(chunk));
+                        } catch (IOException e) {
+                            log.error("Error sending chunk", e);
+                            emitter.completeWithError(e);
+                        }
+                    },
+                    error -> {
+                        log.error("Error in stream", error);
+                        try {
+                            emitter.send(SseEmitter.event()
+                                    .name("error")
+                                    .data("Error: " + error.getMessage()));
+                            emitter.completeWithError(error);
+                        } catch (IOException e) {
+                            emitter.completeWithError(e);
+                        }
+                    },
+                    () -> {
+                        try {
+                            log.info("Stream completed, sending final event");
+                            emitter.send(SseEmitter.event()
+                                    .name("complete")
+                                    .data("Code generation completed"));
+                            Thread.sleep(100);
+                            emitter.complete();
+                            log.info("SSE emitter completed successfully");
+                        } catch (Exception e) {
+                            log.error("Error completing stream", e);
+                            try {
+                                emitter.completeWithError(e);
+                            } catch (Exception ex) {
+                                log.error("Error completing emitter with error", ex);
+                            }
+                        }
+                    }
+                );
+            } catch (Exception e) {
+                log.error("Error starting stream", e);
+                emitter.completeWithError(e);
+            }
+        });
+        
+        return emitter;
     }
 }
 
