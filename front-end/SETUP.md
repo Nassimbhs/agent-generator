@@ -18,9 +18,7 @@
    ```
 
 4. **Access application**:
-   Open http://localhost:8090
-   
-   Note: Port is configured as 8090 in angular.json. The server is also configured to listen on 0.0.0.0 (all interfaces) so it can be accessed from external machines when running on VPS.
+   Open http://localhost:4200
 
 ## Features Implemented
 
