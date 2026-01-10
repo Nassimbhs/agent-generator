@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor
@@ -91,16 +92,24 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                     }
                 })
                 .filter(response -> response != null) // Filter nulls first
-                .filter(response -> {
+                // IMPORTANT: takeUntil must come BEFORE filtering out done markers
+                // This allows takeUntil to see the done marker and terminate the stream
+                .takeUntil(response -> {
                     Boolean done = response.getDone();
-                    String responseText = response.getResponse();
-                    
-                    // If done marker, allow it through for takeUntil but don't emit content
                     if (Boolean.TRUE.equals(done)) {
-                        log.info("Received done marker from Ollama");
+                        log.info("Stream termination triggered by done marker from Ollama");
+                    }
+                    return Boolean.TRUE.equals(done);
+                })
+                .filter(response -> {
+                    // Now filter out done markers and invalid responses AFTER takeUntil has seen them
+                    Boolean done = response.getDone();
+                    if (Boolean.TRUE.equals(done)) {
+                        log.debug("Filtering out done marker (already processed by takeUntil)");
                         return false; // Don't emit done markers as content
                     }
                     
+                    String responseText = response.getResponse();
                     // Must have valid response content
                     if (responseText == null || responseText.trim().isEmpty()) {
                         log.debug("Empty response chunk, skipping");
@@ -119,13 +128,6 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                     
                     log.debug("Accepting response chunk: {} chars", responseText.length());
                     return true;
-                })
-                .takeUntil(response -> {
-                    Boolean done = response.getDone();
-                    if (Boolean.TRUE.equals(done)) {
-                        log.info("Stream termination triggered by done marker");
-                    }
-                    return Boolean.TRUE.equals(done);
                 })
                 .map(response -> {
                     if (response == null) {
