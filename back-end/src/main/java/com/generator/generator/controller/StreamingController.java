@@ -4,6 +4,7 @@ import com.generator.generator.entity.Project;
 import com.generator.generator.entity.User;
 import com.generator.generator.repository.ProjectRepository;
 import com.generator.generator.repository.UserRepository;
+import com.generator.generator.service.CodeFormatterService;
 import com.generator.generator.service.StreamingCodeGenerationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -34,6 +35,7 @@ public class StreamingController {
     private final StreamingCodeGenerationService streamingService;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final CodeFormatterService codeFormatterService;
 
     @GetMapping(value = "/{id}/generate/backend/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "Stream backend code generation", description = "Streams Spring Boot CRUD code generation in real-time. Optionally provide existingProjectPath to enhance with existing project files.")
@@ -158,9 +160,12 @@ public class StreamingController {
                             
                             // Save the complete code to database
                             if (!finalCode.isEmpty()) {
-                                project.setBackendCode(finalCode);
+                                // Format the code before saving
+                                String formattedCode = codeFormatterService.formatGeneratedCode(finalCode);
+                                project.setBackendCode(formattedCode);
                                 projectRepository.save(project);
-                                log.info("Saved backend code to database for project: {}", id);
+                                log.info("Saved formatted backend code to database for project: {} (original: {} chars, formatted: {} chars)", 
+                                    id, finalCode.length(), formattedCode.length());
                             } else {
                                 log.warn("Stream completed but no code was generated!");
                                 emitter.send(SseEmitter.event()
@@ -339,9 +344,12 @@ public class StreamingController {
                             
                             // Save the complete code to database
                             if (!finalCode.isEmpty()) {
-                                project.setFrontendCode(finalCode);
+                                // Format the code before saving
+                                String formattedCode = codeFormatterService.formatGeneratedCode(finalCode);
+                                project.setFrontendCode(formattedCode);
                                 projectRepository.save(project);
-                                log.info("Saved frontend code to database for project: {}", id);
+                                log.info("Saved formatted frontend code to database for project: {} (original: {} chars, formatted: {} chars)", 
+                                    id, finalCode.length(), formattedCode.length());
                             } else {
                                 log.warn("Stream completed but no code was generated!");
                                 emitter.send(SseEmitter.event()

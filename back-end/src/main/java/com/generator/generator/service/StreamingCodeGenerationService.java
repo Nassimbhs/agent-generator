@@ -37,6 +37,7 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
     private final ExistingProjectReaderService projectReaderService;
+    private final CodeFormatterService codeFormatterService;
 
     @Override
     public Flux<String> generateSpringBootCrudStream(String prompt) {
@@ -195,26 +196,35 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
         if (existingCode != null && !existingCode.trim().isEmpty()) {
             // Enhanced prompt with existing code context
             return String.format("""
-                You are a Spring Boot expert working on an EXISTING project.
+                You are a Spring Boot 4.0.1 expert working on an EXISTING project. Generate COMPLETE, COMPILATION-READY code.
                 
                 %s
                 
                 Based on the existing code above, generate or modify files to meet these requirements:
                 %s
                 
+                CRITICAL FORMATTING RULES (MANDATORY):
+                - ALWAYS use proper spacing between keywords: "public class", NOT "publicclass"
+                - ALWAYS add newlines between code blocks and annotations
+                - ALWAYS format code with proper indentation (4 spaces)
+                - ALWAYS include ALL required imports
+                - ALWAYS follow Java naming conventions (PascalCase for classes, camelCase for methods/variables)
+                - ALWAYS separate annotations with newlines: "@Entity\\npublic class" NOT "@Entitypublic class"
+                - ALWAYS add spaces: "private String" NOT "privateString", "public void" NOT "publicvoid"
+                - ALWAYS format method signatures: "public void methodName()" NOT "publicvoidmethodName()"
+                
+                OUTPUT FORMAT (MANDATORY):
+                FILE: path/to/file.ext
+                ```language
+                [EXACT CODE WITH PROPER FORMATTING - NO CONCATENATED KEYWORDS]
+                ```
+                
                 IMPORTANT INSTRUCTIONS:
-                - For EXISTING files that need changes: Show ONLY the modified sections or complete file with changes highlighted
+                - For EXISTING files that need changes: Show ONLY the modified sections or complete file with changes
                 - For NEW files: Show the complete file with the FILE: format
                 - Preserve existing code structure, patterns, and conventions
                 - Maintain package structure and naming conventions from existing code
                 - Only generate files that need to be created or modified
-                
-                Format each file as:
-                
-                FILE: path/to/file.ext
-                ```language
-                // file content here
-                ```
                 
                 Generate only the Spring Boot files needed:
                 1. Entity classes (JPA entities) - NEW or MODIFIED only
@@ -226,33 +236,49 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                 7. Configuration files - MODIFIED sections only if needed
                 8. Main application class - MODIFIED only if needed
                 
+                Each file must be COMPLETE and COMPILATION-READY.
+                NO PLACEHOLDERS. NO INCOMPLETE CODE. NO CONCATENATED KEYWORDS.
+                
                 For each file, show the complete code with proper imports. Use proper Java package structure matching the existing project.
                 Return ONLY the files that need to be created or modified with the format above, no explanations between files.
                 Start generating files now.
                 """, existingCode, userPrompt);
         } else {
-            // Original prompt for new projects (fast path)
+            // Enhanced prompt for new projects with explicit formatting rules
             return String.format("""
-                You are a Spring Boot expert. Generate a complete Spring Boot CRUD application based on the requirements.
+                You are a Spring Boot 4.0.1 expert. Generate a COMPLETE, COMPILATION-READY Spring Boot CRUD application.
                 
-                Format each file as:
+                CRITICAL FORMATTING RULES (MANDATORY):
+                - ALWAYS use proper spacing between keywords: "public class", NOT "publicclass"
+                - ALWAYS add newlines between code blocks and annotations
+                - ALWAYS format code with proper indentation (4 spaces)
+                - ALWAYS include ALL required imports
+                - ALWAYS follow Java naming conventions (PascalCase for classes, camelCase for methods/variables)
+                - ALWAYS separate annotations with newlines: "@Entity\\npublic class" NOT "@Entitypublic class"
+                - ALWAYS add spaces: "private String" NOT "privateString", "public void" NOT "publicvoid"
+                - ALWAYS format method signatures: "public void methodName()" NOT "publicvoidmethodName()"
+                - ALWAYS format field declarations: "private String description;" NOT "privateStringdescription;"
                 
+                OUTPUT FORMAT (MANDATORY):
                 FILE: path/to/file.ext
                 ```language
-                // file content here
+                [EXACT CODE WITH PROPER FORMATTING - NO CONCATENATED KEYWORDS]
                 ```
                 
                 Requirements: %s
                 
                 Generate all Spring Boot files needed:
-                1. Entity classes (JPA entities)
-                2. Repository interfaces (Spring Data JPA)
-                3. Service interfaces (IService)
-                4. Service implementations
-                5. Controller classes (REST controllers)
-                6. DTO classes (Request/Response)
-                7. Configuration files (application.properties, pom.xml)
-                8. Main application class
+                1. Entity classes (JPA entities) with @Entity, @Table, @Id, @GeneratedValue
+                2. Repository interfaces extending JpaRepository<Entity, Long>
+                3. Service interfaces (IService) with CRUD method signatures
+                4. Service implementations with @Service, @Autowired, all CRUD operations
+                5. Controller classes with @RestController, @RequestMapping, @GetMapping, @PostMapping, @PutMapping, @DeleteMapping
+                6. DTO classes (Request/Response) with Lombok annotations (@Data, @Builder)
+                7. Configuration files (application.properties with database config, pom.xml with all dependencies)
+                8. Main application class with @SpringBootApplication
+                
+                Each file must be COMPLETE and COMPILATION-READY.
+                NO PLACEHOLDERS. NO INCOMPLETE CODE. NO CONCATENATED KEYWORDS.
                 
                 For each file, show the complete code with proper imports. Use proper Java package structure.
                 Return ONLY the files with the format above, no explanations between files.
@@ -265,12 +291,28 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
         if (existingCode != null && !existingCode.trim().isEmpty()) {
             // Enhanced prompt with existing code context
             return String.format("""
-                You are an Angular/TypeScript expert working on an EXISTING project.
+                You are an Angular 17+ / TypeScript 5+ expert working on an EXISTING project. Generate COMPLETE, COMPILATION-READY code.
                 
                 %s
                 
                 Based on the existing code above, generate or modify files to meet these requirements:
                 %s
+                
+                CRITICAL FORMATTING RULES (MANDATORY):
+                - ALWAYS use proper spacing between keywords: "export class", NOT "exportclass"
+                - ALWAYS add newlines between code blocks and decorators
+                - ALWAYS format code with proper indentation (2 spaces for TypeScript/HTML)
+                - ALWAYS include ALL required imports
+                - ALWAYS follow TypeScript/Angular naming conventions
+                - ALWAYS separate decorators with newlines: "@Component\\nexport class" NOT "@Componentexport class"
+                - ALWAYS add spaces: "private name: string" NOT "privatename: string"
+                - ALWAYS format method signatures: "public methodName(): void" NOT "publicmethodName():void"
+                
+                OUTPUT FORMAT (MANDATORY):
+                FILE: path/to/file.ext
+                ```language
+                [EXACT CODE WITH PROPER FORMATTING - NO CONCATENATED KEYWORDS]
+                ```
                 
                 IMPORTANT INSTRUCTIONS:
                 - For EXISTING files that need changes: Show ONLY the modified sections or complete file with changes
@@ -279,13 +321,6 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                 - Maintain file structure and naming conventions from existing code
                 - Only generate files that need to be created or modified
                 
-                Format each file as:
-                
-                FILE: path/to/file.ext
-                ```language
-                // file content here
-                ```
-                
                 Generate only the files needed:
                 1. HTML files - NEW or MODIFIED only
                 2. CSS files - NEW or MODIFIED only
@@ -293,31 +328,48 @@ public class StreamingCodeGenerationService implements IStreamingCodeGenerationS
                 4. Configuration files (package.json, etc.) - MODIFIED sections only if needed
                 5. Any other necessary files - NEW only
                 
+                Each file must be COMPLETE and COMPILATION-READY.
+                NO PLACEHOLDERS. NO INCOMPLETE CODE. NO CONCATENATED KEYWORDS.
+                
                 For each file, show the full path and complete code. Use proper file structure with folders matching the existing project.
                 Return ONLY the files that need to be created or modified with the format above, no explanations between files.
                 """, existingCode, userPrompt);
         } else {
-            // Original prompt for new projects (fast path)
-            return """
-                Generate a complete project structure with all files. Format each file as:
+            // Enhanced prompt for new projects with explicit formatting rules
+            return String.format("""
+                You are an Angular 17+ / TypeScript 5+ expert. Generate a COMPLETE, COMPILATION-READY Angular project.
                 
+                CRITICAL FORMATTING RULES (MANDATORY):
+                - ALWAYS use proper spacing between keywords: "export class", NOT "exportclass"
+                - ALWAYS add newlines between code blocks and decorators
+                - ALWAYS format code with proper indentation (2 spaces for TypeScript/HTML)
+                - ALWAYS include ALL required imports
+                - ALWAYS follow TypeScript/Angular naming conventions
+                - ALWAYS separate decorators with newlines: "@Component\\nexport class" NOT "@Componentexport class"
+                - ALWAYS add spaces: "private name: string" NOT "privatename: string"
+                - ALWAYS format method signatures: "public methodName(): void" NOT "publicmethodName():void"
+                
+                OUTPUT FORMAT (MANDATORY):
                 FILE: path/to/file.ext
                 ```language
-                // file content here
+                [EXACT CODE WITH PROPER FORMATTING - NO CONCATENATED KEYWORDS]
                 ```
                 
                 Requirements: %s
                 
                 Generate all files needed for the project:
-                1. HTML files (index.html, etc.)
-                2. CSS files (styles.css, etc.)
-                3. JavaScript files (app.js, etc.)
-                4. Configuration files (package.json, README.md, etc.)
+                1. HTML files (index.html, component templates, etc.)
+                2. CSS files (styles.css, component styles, etc.)
+                3. TypeScript files (components, services, models, etc.)
+                4. Configuration files (package.json with all dependencies, tsconfig.json, angular.json, etc.)
                 5. Any other necessary files
+                
+                Each file must be COMPLETE and COMPILATION-READY.
+                NO PLACEHOLDERS. NO INCOMPLETE CODE. NO CONCATENATED KEYWORDS.
                 
                 For each file, show the full path and complete code. Use proper file structure with folders.
                 Return ONLY the files with the format above, no explanations between files.
-                """.formatted(userPrompt);
+                """, userPrompt);
         }
     }
 
