@@ -64,100 +64,93 @@ export class ProjectStructureService {
     }
     
     // Parse FILE: patterns from generated code
-    // Expected format:
-    // FILE: path/to/file.ext
-    // ```language
-    // content here
-    // ```
-    // 
-    // OR (during streaming, without closing backticks):
-    // FILE: path/to/file.ext
-    // ```language
-    // content here (incomplete)
+    // Handles multiple formats:
+    // 1. Normal: FILE: path\n```language\ncontent\n```
+    // 2. Malformed (no newlines): FILE:path```languagecontent```
+    // 3. Concatenated: FILE:path1```...```FILE:path2```...
     
     const files: any[] = [];
     
-    // More precise pattern that matches:
-    // FILE: path (on same line, until newline - MUST end at newline, not at ```)
-    // Then optional ```language on new line
-    // Then content until closing ``` or next FILE:
-    // CRITICAL: Path must end with newline, and ``` must be on new line
-    // Pattern: FILE: path\n```language\ncontent\n```
-    const filePattern = /(?:^|\r?\n)\s*FILE:\s*([^\n\r```]+?)\s*(?:\r?\n)\s*(?:```(\w+)?\s*\r?\n)?([\s\S]*?)(?:```(?:\s*\r?\n|$)|(?=(?:^|\r?\n)\s*FILE:)|$)/gim;
+    // Split code by FILE: markers (case-insensitive)
+    // This handles all formats including concatenated ones
+    const fileSections = code.split(/(?=FILE:)/gi).filter((s: string) => s.trim().length > 0 && /^FILE:/i.test(s.trim()));
     
-    let match;
-    let lastMatchIndex = 0;
-
-    while ((match = filePattern.exec(code)) !== null) {
-      // Group 1: File path (everything after FILE: until newline, must not contain ```)
-      let path = (match[1] || '').trim();
+    for (const section of fileSections) {
+      // Extract path: from FILE: until ``` (or newline then ```)
+      // Pattern: FILE: path```language or FILE: path\n```language
+      const pathMatch = section.match(/^FILE:\s*([^\n\r```]+?)(?:```|(?:\r?\n)\s*```)/i);
+      if (!pathMatch) continue;
       
-      // CRITICAL: Remove any code block markers that might have leaked into path
-      path = path.replace(/```/g, '').trim();
+      let path = (pathMatch[1] || '').trim();
+      path = path.replace(/```/g, '').replace(/[<>:"|?*\x00-\x1f]/g, '').trim();
       
-      // Remove any invalid characters from path (but keep valid path chars)
-      // Path should only contain: letters, numbers, dots, slashes, hyphens, underscores, spaces
-      path = path.replace(/[<>:"|?*\x00-\x1f```]/g, '').trim();
-      
-      // Skip if path contains suspicious patterns that suggest it captured content
-      if (path.includes('xmlns') || path.includes('package') || path.includes('import') || 
-          path.length > 200 || path.match(/\n|\r/)) {
-        console.warn('Skipping invalid path (likely captured content):', path.substring(0, 50));
+      // Skip invalid paths (contain code keywords or too long)
+      if (path.includes('package') || path.includes('import') || path.includes('xmlns') ||
+          path.includes('public') || path.includes('class') || path.includes('interface') ||
+          path.length > 300 || !path.match(/^[\w\/\.\-\s]+$/)) {
         continue;
       }
       
-      // Group 2: Language (optional, from ```language)
-      let language = (match[2] || '').trim();
+      // Find first ``` after FILE: to extract language and content
+      const codeBlockStart = section.indexOf('```');
+      if (codeBlockStart === -1) continue;
       
-      // Group 3: Content (everything after language marker)
-      let content = (match[3] || '').trim();
+      // Extract language: after ``` until newline or space or next ```
+      const afterBackticks = section.substring(codeBlockStart + 3);
+      const langMatch = afterBackticks.match(/^(\w+)/);
+      const language = langMatch ? langMatch[1].trim() : '';
       
-      // Remove closing backticks if present in content
-      content = content.replace(/```\s*$/gm, '').trim();
-      
-      // If no language was detected from code block, detect from file extension
-      if (!language && path) {
-        language = this.detectLanguage(path);
+      // Content starts after language marker (skip language + any whitespace/newline)
+      let contentStartPos = codeBlockStart + 3 + (langMatch ? langMatch[0].length : 0);
+      // Skip whitespace/newlines after language
+      while (contentStartPos < section.length && /\s/.test(section[contentStartPos])) {
+        contentStartPos++;
       }
       
-      // Extract filename from path (last segment)
-      const pathParts = path.split('/').filter((p: string) => p && p.trim().length > 0 && !p.includes('```'));
+      // Find content end: closing ``` (look for next ``` that's not at start)
+      let contentEnd = section.indexOf('```', contentStartPos + 3);
+      // Also check for next FILE: marker
+      const nextFile = section.indexOf('FILE:', contentStartPos);
+      if (nextFile !== -1 && (contentEnd === -1 || nextFile < contentEnd)) {
+        contentEnd = nextFile;
+      }
+      if (contentEnd === -1) {
+        contentEnd = section.length;
+      }
+      
+      let content = section.substring(contentStartPos, contentEnd).trim();
+      // Remove trailing ```
+      content = content.replace(/```\s*$/gm, '').trim();
+      
+      // Detect language from extension if not found
+      const detectedLang = language || this.detectLanguage(path);
+      
+      // Extract filename
+      const pathParts = path.split('/').filter((p: string) => p && p.trim().length > 0);
       const name = pathParts.length > 0 ? pathParts[pathParts.length - 1] : path || 'unknown';
       
-      // Clean name - remove any code block markers
-      const cleanName = name.replace(/```/g, '').trim();
-
-      // Only add if we have a valid path that looks like a file path
-      if (path && path.length > 0 && path.length < 500 && 
-          (path.includes('/') || path.includes('.') || path.match(/^[\w\.-]+$/))) {
-        
+      // Validate and add file
+      if (path && path.length > 0 && path.length < 500 && (path.includes('/') || path.includes('.'))) {
         const normalizedPath = path.replace(/\\/g, '/');
-        
-        // Check if this file already exists (during streaming, same file might be parsed multiple times)
         const existingIndex = files.findIndex(f => f.path === normalizedPath);
+        
         const fileData = {
           path: normalizedPath,
-          name: cleanName,
+          name: name.trim(),
           content: content,
-          language: language || 'text',
+          language: detectedLang,
           type: 'file'
         };
         
         if (existingIndex >= 0) {
-          // Update existing file with more complete content (only if new content is longer)
           if (content.length > files[existingIndex].content.length) {
             files[existingIndex] = fileData;
-            console.log('Updated file:', normalizedPath, 'Content length:', content.length);
           }
         } else {
           files.push(fileData);
-          console.log('Parsed file:', normalizedPath, 'Name:', cleanName, 'Language:', language || 'auto', 'Content length:', content.length);
+          console.log('Parsed file:', normalizedPath, 'Name:', name, 'Language:', detectedLang, 'Content length:', content.length);
         }
-      } else {
-        console.warn('Skipping file with invalid path:', path.substring(0, 100));
       }
-      
-      lastMatchIndex = match.index + match[0].length;
     }
     
     // If no FILE: patterns found but we have code, treat entire code as single file
