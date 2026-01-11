@@ -206,7 +206,7 @@ import { AuthService } from '../../core/services/auth.service';
                             <ng-template let-node pTemplate="default">
                               <span class="flex align-items-center gap-1 w-full min-w-0">
                                 <i [class]="node.icon" class="flex-shrink-0"></i>
-                                <span class="text-overflow-ellipsis overflow-hidden flex-1 min-w-0 break-words" [title]="node.label">{{ node.label }}</span>
+                                <span class="flex-1 min-w-0 break-words whitespace-normal overflow-visible" [title]="node.label" style="word-break: break-word; overflow-wrap: break-word;">{{ node.label }}</span>
                               </span>
                             </ng-template>
                           </p-tree>
@@ -282,7 +282,7 @@ import { AuthService } from '../../core/services/auth.service';
                             <ng-template let-node pTemplate="default">
                               <span class="flex align-items-center gap-1 w-full min-w-0">
                                 <i [class]="node.icon" class="flex-shrink-0"></i>
-                                <span class="text-overflow-ellipsis overflow-hidden flex-1 min-w-0 break-words" [title]="node.label">{{ node.label }}</span>
+                                <span class="flex-1 min-w-0 break-words whitespace-normal overflow-visible" [title]="node.label" style="word-break: break-word; overflow-wrap: break-word;">{{ node.label }}</span>
                               </span>
                             </ng-template>
                           </p-tree>
@@ -386,9 +386,10 @@ import { AuthService } from '../../core/services/auth.service';
     .project-tree ::ng-deep .p-treenode-content { 
       width: 100%; 
       max-width: 100%;
-      overflow: hidden; 
+      overflow: visible; 
       word-wrap: break-word;
       overflow-wrap: break-word;
+      white-space: normal;
     }
     .project-tree ::ng-deep .p-treenode-content:hover { background-color: #f3f4f6; }
     .project-tree ::ng-deep .p-treenode-content.p-highlight { background-color: #dbeafe; color: #1e40af; }
@@ -401,7 +402,7 @@ import { AuthService } from '../../core/services/auth.service';
     .project-tree ::ng-deep .p-treenode-label { 
       width: 100%; 
       max-width: 100%;
-      overflow: hidden;
+      overflow: visible;
       word-wrap: break-word;
       overflow-wrap: break-word;
       white-space: normal;
@@ -658,11 +659,11 @@ export class GeneratorComponent implements OnDestroy {
             // Don't show error, let the complete handler take care of it
           }
         } else if (readyState === EventSource.CONNECTING) {
-          // Still connecting, wait
-          console.log('EventSource still connecting...');
+          // Still connecting, wait - this is normal, don't log as error
+          // console.log('EventSource still connecting...'); // Suppressed - normal state
         } else if (readyState === EventSource.OPEN) {
-          // Connection open, error might be temporary
-          console.log('EventSource connection open, temporary error?');
+          // Connection open, error might be temporary - don't log as error
+          // console.log('EventSource connection open, temporary error?'); // Suppressed - may be temporary network hiccup
         }
       }
     };
