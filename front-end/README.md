@@ -84,3 +84,4 @@ The application uses:
 - Tablet: `md:` prefix (≥ 768px)
 - Desktop: `lg:` prefix (≥ 992px)
 
+

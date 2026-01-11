@@ -83,10 +83,11 @@ public class CodeFormatterService {
         code = code.replaceAll("privateString", "private String");
         code = code.replaceAll("privateLong", "private Long");
         code = code.replaceAll("privateInteger", "private Integer");
-        code = code.replaceAll("privateBoolean", "private Boolean");
+        code = code.replaceAll("privateBoolean", "private boolean");
         code = code.replaceAll("privateList", "private List");
         code = code.replaceAll("privateMap", "private Map");
         code = code.replaceAll("privateSet", "private Set");
+        code = code.replaceAll("privateboolean", "private boolean");
         code = code.replaceAll("publicString", "public String");
         code = code.replaceAll("publicLong", "public Long");
         code = code.replaceAll("publicList", "public List");
@@ -102,11 +103,16 @@ public class CodeFormatterService {
         
         // Fix @Entity, @Service, etc. concatenations
         code = code.replaceAll("@Entitypublic", "@Entity\npublic");
+        code = code.replaceAll("@Entity@Table", "@Entity\n@Table");
         code = code.replaceAll("@Servicepublic", "@Service\npublic");
         code = code.replaceAll("@RestControllerpublic", "@RestController\npublic");
         code = code.replaceAll("@Autowiredprivate", "@Autowired\n    private");
         code = code.replaceAll("@Id@GeneratedValue", "@Id\n    @GeneratedValue");
-        code = code.replaceAll("@Table\\(name", "@Table(name");
+        code = code.replaceAll("@Table\\s*\\(name", "@Table(name");
+        code = code.replaceAll("@Table\\s*\\(name=", "@Table(name=");
+        
+        // Fix common annotation concatenations without space
+        code = code.replaceAll("(@\\w+)(public|private|protected|class|interface|enum)", "$1\n$2");
         
         // Fix extends/implements concatenations
         code = code.replaceAll("extendsJpaRepository", "extends JpaRepository");
@@ -130,6 +136,12 @@ public class CodeFormatterService {
         code = code.replaceAll("}\\s*public\\s+class", "}\n\npublic class");
         code = code.replaceAll("}\\s*public\\s+interface", "}\n\npublic interface");
         
+        // Fix comments concatenated with code
+        code = code.replaceAll("//([A-Z])([a-z])", "// $1$2");
+        code = code.replaceAll("//GettersandSetters", "// Getters and Setters");
+        code = code.replaceAll("//Getters", "// Getters");
+        code = code.replaceAll("//Setters", "// Setters");
+        
         // Ensure newline after package declaration
         code = code.replaceAll("package\\s+[^;]+;\\s*([^\\n])", "package $1;\n\n$1");
         code = code.replaceAll("package\\s+[^;]+;([^\\n])", "package $1;\n$1");
@@ -144,11 +156,14 @@ public class CodeFormatterService {
      * Fixes import and package statements that are missing spaces.
      */
     private String fixImportAndPackageStatements(String code) {
-        // Fix import statements: "importjavax" -> "import javax"
+        // Fix import statements: "importjakarta" -> "import jakarta"
+        // Match "import" followed by lowercase letter (common patterns)
+        code = code.replaceAll("import(jakarta|javax|org|com|java)(\\.)", "import $1$2");
         code = code.replaceAll("import([a-z])", "import $1");
         code = code.replaceAll("import\\s+([a-z])", "import $1");
         
         // Fix package statements: "packagecom" -> "package com"
+        code = code.replaceAll("package(jakarta|javax|org|com|java)(\\.)", "package $1$2");
         code = code.replaceAll("package([a-z])", "package $1");
         code = code.replaceAll("package\\s+([a-z])", "package $1");
         
@@ -187,6 +202,17 @@ public class CodeFormatterService {
         
         // Fix method declarations: "publicvoidmethodName" -> "public void methodName"
         code = code.replaceAll("(public|private|protected)\\s*(void|String|Long|Integer|Boolean|List|Map|Set|Task|ResponseEntity)([a-z])", "$1 $2 $3");
+        
+        // Fix field declarations without space: "privateLongid" -> "private Long id"
+        code = code.replaceAll("(private|public|protected)(Long|String|Integer|Boolean|List|Map|Set|Date|Task)([a-z])([^;]*;)", "$1 $2 $3$4");
+        
+        // Fix return statements: "returnid;" -> "return id;"
+        code = code.replaceAll("return([a-z])", "return $1");
+        code = code.replaceAll("return([A-Z])", "return $1");
+        
+        // Fix this assignments: "this.id=id:" -> "this.id = id;"
+        code = code.replaceAll("this\\.([a-z]+)=([^;]+):", "this.$1 = $2;");
+        code = code.replaceAll("this\\.([a-z]+)=([^;]+);", "this.$1 = $2;");
         
         // Fix return type spacing: "publicList<Task>" -> "public List<Task>"
         code = code.replaceAll("(public|private|protected)(List|Map|Set)<", "$1 $2<");
@@ -295,4 +321,5 @@ public class CodeFormatterService {
         return code;
     }
 }
+
 

@@ -38,3 +38,4 @@ public class OllamaResponse {
     private Long evalDuration;
 }
 
+

@@ -5,14 +5,18 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -97,10 +101,11 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/api/users/register", "/api/users/login").permitAll()
-                .requestMatchers("/api/projects/*/generate/backend/stream").authenticated()
-                .requestMatchers("/api/projects/*/generate/frontend/stream").authenticated()
-                .requestMatchers("/api/generate/backend/stream").authenticated()
-                .requestMatchers("/api/generate/frontend/stream").authenticated()
+                // SSE endpoints - allow any authenticated user (use custom authorization manager)
+                .requestMatchers("/api/projects/*/generate/backend/stream").access(authenticatedAuthorizationManager())
+                .requestMatchers("/api/projects/*/generate/frontend/stream").access(authenticatedAuthorizationManager())
+                .requestMatchers("/api/generate/backend/stream").access(authenticatedAuthorizationManager())
+                .requestMatchers("/api/generate/frontend/stream").access(authenticatedAuthorizationManager())
                 .requestMatchers("/api/project/**").authenticated()
                 .requestMatchers("/api/templates/**").authenticated()
                 .anyRequest().authenticated()
@@ -109,6 +114,21 @@ public class SecurityConfig {
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * Custom authorization manager that allows any authenticated user.
+     * This ensures that Spring Security 7.x AuthorizationFilter allows authenticated users
+     * even if they don't have specific authorities.
+     */
+    private AuthorizationManager<RequestAuthorizationContext> authenticatedAuthorizationManager() {
+        return (authentication, context) -> {
+            if (authentication == null || !authentication.isAuthenticated()) {
+                return new AuthorizationDecision(false);
+            }
+            // Allow any authenticated user
+            return new AuthorizationDecision(true);
+        };
     }
 
     @Bean
